@@ -11,6 +11,7 @@ export type Orientation = "landscape" | "portrait" | "square" | "unknown";
 
 export type MediaReference = {
   blockUid: string;
+  pageUid: string;
   createdTime: number | null;
   updatedTime: number | null;
   createdAuthor: string;

@@ -4,8 +4,13 @@ import getCurrentPageUid from "roamjs-components/dom/getCurrentPageUid";
 
 import type { MediaItem, MediaReference } from "~/types/media";
 import {
+  copyMediaFileWithFallback,
+  type MediaCopyResult,
+} from "~/utils/media/clipboard";
+import {
   extractMediaReferences,
   inferOrientation,
+  isRoamStorageUrl,
   parseMediaUrl,
 } from "~/utils/media/url";
 
@@ -17,7 +22,6 @@ type FileApi = {
     toast?: { hide?: boolean };
   }) => Promise<string>;
   get?: (args: { url: string }) => Promise<File>;
-  delete?: (args: { url: string }) => Promise<void>;
 };
 
 type RoamApiWithFile = typeof window.roamAlphaAPI & {
@@ -26,6 +30,7 @@ type RoamApiWithFile = typeof window.roamAlphaAPI & {
 
 type BlockMeta = {
   uid: string;
+  pageUid: string;
   createdTime: number | null;
   updatedTime: number | null;
   createdAuthor: string;
@@ -41,10 +46,11 @@ const BLOCK_QUERY = `[:find ?uid ?string
 
 const BLOCK_PULL_PATTERN = `[
   :block/uid
+  {:block/page [:block/uid]}
   :create/time
   :edit/time
-  {:create/user [:user/display-name :user/uid]}
-  {:edit/user [:user/display-name :user/uid]}
+  {:create/user [:user/display-name :user/uid {:user/display-page [:node/title]}]}
+  {:edit/user [:user/display-name :user/uid {:user/display-page [:node/title]}]}
 ]`;
 
 const toRecord = (value: unknown): PullRecord => {
@@ -103,7 +109,19 @@ const readUserName = (value: unknown): string => {
     (user[":user/uid"] as string | undefined) ||
     (user["user/uid"] as string | undefined) ||
     (user.uid as string | undefined);
-  return displayName || uid || "Unknown";
+  const displayPageName = getValue<string>({
+    obj: getValue({
+      obj: user,
+      keys: [
+        ":user/display-page",
+        "user/display-page",
+        "display-page",
+        "displayPage",
+      ],
+    }),
+    keys: [":node/title", "node/title", "title"],
+  });
+  return displayName || displayPageName || uid || "Unknown";
 };
 
 const getRoamApi = (): RoamApiWithFile =>
@@ -173,6 +191,14 @@ const pullBlockMetadata = async ({
       if (!uidValue) {
         return;
       }
+      const pageUid =
+        getValue<string>({
+          obj: getValue({
+            obj: pull,
+            keys: [":block/page", "block/page", "page"],
+          }),
+          keys: [":block/uid", "block/uid", "uid"],
+        }) || "";
       const createdTime = toTimestamp(
         getValue({
           obj: pull,
@@ -199,6 +225,7 @@ const pullBlockMetadata = async ({
       );
       output.set(uidValue, {
         uid: uidValue,
+        pageUid,
         createdTime,
         updatedTime,
         createdAuthor,
@@ -249,6 +276,7 @@ const normalizeReference = ({
   meta: BlockMeta | undefined;
 }): MediaReference => ({
   blockUid,
+  pageUid: meta?.pageUid || "",
   createdTime: meta?.createdTime ?? null,
   updatedTime: meta?.updatedTime ?? null,
   createdAuthor: meta?.createdAuthor || "Unknown",
@@ -314,7 +342,7 @@ export const queryAllMediaItems = async (): Promise<MediaItem[]> => {
         mediaByUrl.set(parsed.url, {
           id: parsed.url,
           url: parsed.url,
-          fileName: parsed.fileName,
+          fileName: parsed.displayName || parsed.fileName,
           extension: parsed.extension,
           searchText: parsed.searchText,
           mediaType: parsed.mediaType,
@@ -357,12 +385,60 @@ export const queryAllMediaItems = async (): Promise<MediaItem[]> => {
   });
 };
 
-const getFocusedParentUid = (): string | null => {
+export const getPreferredMediaReference = ({
+  item,
+}: {
+  item: MediaItem;
+}): MediaReference | null =>
+  item.references.reduce<MediaReference | null>((preferred, candidate) => {
+    if (!preferred) {
+      return candidate;
+    }
+    const preferredUpdatedTime = preferred.updatedTime ?? 0;
+    const candidateUpdatedTime = candidate.updatedTime ?? 0;
+    if (candidateUpdatedTime !== preferredUpdatedTime) {
+      return candidateUpdatedTime > preferredUpdatedTime
+        ? candidate
+        : preferred;
+    }
+    return candidate.blockUid < preferred.blockUid ? candidate : preferred;
+  }, null);
+
+export const openMediaItemSource = async ({
+  item,
+}: {
+  item: MediaItem;
+}): Promise<void> => {
+  const reference = getPreferredMediaReference({ item });
+  if (!reference) {
+    return;
+  }
+  await window.roamAlphaAPI.ui.mainWindow.openBlock({
+    block: { uid: reference.blockUid },
+  });
+};
+
+export const openMediaItemReferences = async ({
+  item,
+}: {
+  item: MediaItem;
+}): Promise<void> => {
+  const blockUids = Array.from(
+    new Set(item.references.map(({ blockUid }) => blockUid)),
+  ).filter(Boolean);
+  for (const blockUid of [...blockUids].reverse()) {
+    await window.roamAlphaAPI.ui.rightSidebar.addWindow({
+      window: { type: "block", "block-uid": blockUid },
+    });
+  }
+};
+
+export const captureUploadParentUid = (): string | null => {
   const focused = window.roamAlphaAPI.ui.getFocusedBlock();
   if (focused?.["block-uid"]) {
     return focused["block-uid"];
   }
-  return null;
+  return getCurrentPageUid() || null;
 };
 
 const getPageUidByTitle = async ({
@@ -377,14 +453,13 @@ const getPageUidByTitle = async ({
   return typeof rows === "string" ? rows : null;
 };
 
-const getOrCreateUploadsParentUid = async (): Promise<string> => {
-  const focusedUid = getFocusedParentUid();
-  if (focusedUid) {
-    return focusedUid;
-  }
-  const currentPageUid = getCurrentPageUid();
-  if (currentPageUid) {
-    return currentPageUid;
+const getOrCreateUploadsParentUid = async ({
+  parentUid,
+}: {
+  parentUid: string | null;
+}): Promise<string> => {
+  if (parentUid) {
+    return parentUid;
   }
   const existingUid = await getPageUidByTitle({ title: MEDIA_UPLOADS_PAGE });
   if (existingUid) {
@@ -398,7 +473,13 @@ const getFileApi = (): FileApi => {
   return roam.file || {};
 };
 
-const mediaMarkdownForUrl = ({
+const sanitizeMarkdownLabel = (value: string): string =>
+  value
+    .replace(/[\[\]\r\n]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim() || "Uploaded media";
+
+export const formatUploadedMediaReference = ({
   url,
   fileName,
 }: {
@@ -409,60 +490,89 @@ const mediaMarkdownForUrl = ({
   if (!parsed) {
     return url;
   }
+  const label = sanitizeMarkdownLabel(fileName);
   if (parsed.mediaType === "image" || parsed.mediaType === "gif") {
-    return `![${fileName}](${url})`;
+    return `![${label}](${url})`;
   }
   if (parsed.mediaType === "video") {
-    return `{{[[video]]: ${url}}}`;
+    return `{{[[video]]: ${url}}} [${label}](${url})`;
   }
   if (parsed.mediaType === "audio") {
-    return `{{[[audio]]: ${url}}}`;
+    return `{{[[audio]]: ${url}}} [${label}](${url})`;
   }
-  return url;
+  return `[${label}](${url})`;
+};
+
+export const extractUploadedFileUrl = (uploadResult: string): string | null =>
+  parseMediaUrl(uploadResult)?.url ||
+  extractMediaReferences(uploadResult)[0]?.url ||
+  null;
+
+const waitForBlockToBeQueryable = async ({
+  blockUid,
+  timeoutMs = 5_000,
+}: {
+  blockUid: string;
+  timeoutMs?: number;
+}): Promise<void> => {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const blockString = (await window.roamAlphaAPI.data.async.q(
+      "[:find ?string . :in $ ?uid :where [?b :block/uid ?uid] [?b :block/string ?string]]",
+      blockUid,
+    )) as unknown;
+    if (typeof blockString === "string") {
+      return;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 100));
+  }
 };
 
 export const uploadFileAndCreateReference = async ({
   file,
+  fileName: requestedFileName,
+  parentUid: requestedParentUid,
 }: {
   file: File;
+  fileName?: string;
+  parentUid?: string | null;
 }): Promise<string> => {
+  const capturedParentUid =
+    requestedParentUid === undefined
+      ? captureUploadParentUid()
+      : requestedParentUid;
   const fileApi = getFileApi();
-  let url: string | null = null;
+  const fileName = requestedFileName || file.name || "Uploaded media";
+  let uploadResult: string | null = null;
   if (typeof fileApi.upload === "function") {
-    url = await fileApi.upload({ file, toast: { hide: true } });
+    uploadResult = await fileApi.upload({ file, toast: { hide: true } });
   } else if (typeof window.roamAlphaAPI.util.uploadFile === "function") {
-    url = await window.roamAlphaAPI.util.uploadFile({ file });
+    uploadResult = await window.roamAlphaAPI.util.uploadFile({ file });
   }
+  const url = uploadResult ? extractUploadedFileUrl(uploadResult) : null;
   if (!url) {
-    throw new Error("Roam file upload API is unavailable.");
+    throw new Error("Roam did not return a usable URL for the uploaded file.");
   }
-  const parentUid = await getOrCreateUploadsParentUid();
-  await createBlock({
+  const parentUid = await getOrCreateUploadsParentUid({
+    parentUid: capturedParentUid,
+  });
+  const blockUid = await createBlock({
     parentUid,
     order: "last",
     node: {
-      text: mediaMarkdownForUrl({ url, fileName: file.name }),
+      text: formatUploadedMediaReference({ url, fileName }),
     },
   });
+  await waitForBlockToBeQueryable({ blockUid });
   return url;
-};
-
-export const deleteFileByUrl = async ({
-  url,
-}: {
-  url: string;
-}): Promise<void> => {
-  const fileApi = getFileApi();
-  if (typeof fileApi.delete !== "function") {
-    throw new Error("Roam file delete API is unavailable.");
-  }
-  await fileApi.delete({ url });
 };
 
 const fetchAsFile = async ({ url }: { url: string }): Promise<File> => {
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error("Failed to fetch file for clipboard.");
+    throw new Error(
+      `Failed to fetch the media file (HTTP ${response.status}).`,
+    );
   }
   const blob = await response.blob();
   const parsed = parseMediaUrl(url);
@@ -473,11 +583,17 @@ const fetchAsFile = async ({ url }: { url: string }): Promise<File> => {
 };
 
 export const getFileByUrl = async ({ url }: { url: string }): Promise<File> => {
-  const fileApi = getFileApi();
-  if (typeof fileApi.get === "function") {
-    return fileApi.get({ url });
+  if (!isRoamStorageUrl(url)) {
+    return fetchAsFile({ url });
   }
-  return fetchAsFile({ url });
+  const fileApi = getFileApi();
+  if (typeof fileApi.get !== "function") {
+    throw new Error(
+      "Roam file retrieval is unavailable. Please reload Roam and try again.",
+    );
+  }
+  // Raw fetching could return encrypted bytes instead of the usable original file.
+  return fileApi.get({ url });
 };
 
 export const copyTextToClipboard = async ({
@@ -488,24 +604,20 @@ export const copyTextToClipboard = async ({
   await navigator.clipboard.writeText(text);
 };
 
-export const copyFileToClipboard = async ({
-  file,
+export const copyMediaFile = ({
+  url,
+  fileName,
+  mimeType,
 }: {
-  file: File;
-}): Promise<void> => {
-  if (!navigator.clipboard || typeof navigator.clipboard.write !== "function") {
-    throw new Error("Clipboard file API is unavailable in this browser.");
-  }
-  if (typeof ClipboardItem === "undefined") {
-    throw new Error("ClipboardItem is unavailable in this browser.");
-  }
-  const fileType = file.type || "application/octet-stream";
-  await navigator.clipboard.write([
-    new ClipboardItem({
-      [fileType]: file,
-    }),
-  ]);
-};
+  url: string;
+  fileName: string;
+  mimeType: string;
+}): Promise<MediaCopyResult> =>
+  copyMediaFileWithFallback({
+    loadFile: () => getFileByUrl({ url }),
+    fileName,
+    mimeType,
+  });
 
 export const withImageDimensions = ({
   item,

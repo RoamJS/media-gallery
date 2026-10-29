@@ -1,12 +1,23 @@
 import { test, expect } from "@playwright/test";
 
 import type { MediaFilters, MediaItem } from "../src/types/media";
-import { applyMediaFilters } from "../src/utils/media/filter";
+import {
+  applyMediaFilters,
+  applySemanticResultFilters,
+} from "../src/utils/media/filter";
+import {
+  extractUploadedFileUrl,
+  formatUploadedMediaReference,
+  getPreferredMediaReference,
+  openMediaItemSource,
+  openMediaItemReferences,
+} from "../src/utils/media/roam";
 import {
   classifyMediaType,
   extractMediaReferences,
   extractMediaUrls,
   inferOrientation,
+  isRoamStorageUrl,
   parseMediaUrl,
 } from "../src/utils/media/url";
 
@@ -113,6 +124,68 @@ test("extracts markdown text as searchable content", () => {
   );
 });
 
+test("uses explicit media markup when URLs have no file extension", () => {
+  const refs = extractMediaReferences(
+    "![RoamJS logo](https://avatars.githubusercontent.com/u/138642184) {{video: https://media.example.com/stream}}",
+  );
+
+  expect(refs).toHaveLength(2);
+  expect(refs[0]).toMatchObject({
+    mediaType: "image",
+    displayName: "RoamJS logo",
+    searchText: expect.stringContaining("RoamJS logo"),
+  });
+  expect(refs[1]).toMatchObject({
+    mediaType: "video",
+    searchText: expect.stringContaining("video"),
+  });
+});
+
+test("deduplicates an uploaded preview and preserves its filename link", () => {
+  const url =
+    "https://firebasestorage.googleapis.com/v0/b/graph/o/generated.png?alt=media";
+  const refs = extractMediaReferences(
+    `![](${url}) [Quarterly chart.png](${url})`,
+  );
+
+  expect(refs).toHaveLength(1);
+  expect(refs[0]).toMatchObject({
+    displayName: "Quarterly chart.png",
+    searchText: expect.stringContaining("Quarterly chart.png"),
+  });
+});
+
+test("identifies URLs that Roam can delete from graph storage", () => {
+  expect(
+    isRoamStorageUrl(
+      "https://firebasestorage.googleapis.com/v0/b/graph/o/image.png?alt=media",
+    ),
+  ).toBe(true);
+  expect(isRoamStorageUrl("https://example.com/image.png")).toBe(false);
+  expect(isRoamStorageUrl("not a url")).toBe(false);
+});
+
+test("preserves an uploaded image filename in Roam-compatible Markdown", () => {
+  const url =
+    "https://firebasestorage.googleapis.com/v0/b/graph/o/generated.png?alt=media";
+
+  expect(
+    formatUploadedMediaReference({
+      url,
+      fileName: "Quarterly [draft] chart.png",
+    }),
+  ).toBe(`![Quarterly draft chart.png](${url})`);
+});
+
+test("extracts the URL from Roam's upload response", () => {
+  const url =
+    "https://firebasestorage.googleapis.com/v0/b/graph/o/generated.png?alt=media";
+
+  expect(extractUploadedFileUrl(`![](${url})`)).toBe(url);
+  expect(extractUploadedFileUrl(url)).toBe(url);
+  expect(extractUploadedFileUrl("not an upload result")).toBeNull();
+});
+
 test("applies author, type, date, and sort filters", () => {
   const authorFilters = baseFilters();
   authorFilters.author = "Alice";
@@ -159,4 +232,219 @@ test("applies author, type, date, and sort filters", () => {
   });
   expect(textResults).toHaveLength(1);
   expect(textResults[0].id).toBe("2");
+});
+
+test("selects the newest media reference with a stable block UID tie-break", () => {
+  const item: MediaItem = {
+    ...sampleItems[0],
+    references: [
+      {
+        blockUid: "z-block",
+        pageUid: "page-1",
+        createdTime: 10,
+        updatedTime: 100,
+        createdAuthor: "Alice",
+        updatedAuthor: "Alice",
+      },
+      {
+        blockUid: "b-block",
+        pageUid: "page-2",
+        createdTime: 20,
+        updatedTime: 200,
+        createdAuthor: "Bob",
+        updatedAuthor: "Bob",
+      },
+      {
+        blockUid: "a-block",
+        pageUid: "page-3",
+        createdTime: 30,
+        updatedTime: 200,
+        createdAuthor: "Carol",
+        updatedAuthor: "Carol",
+      },
+    ],
+  };
+
+  expect(getPreferredMediaReference({ item })).toMatchObject({
+    blockUid: "a-block",
+    pageUid: "page-3",
+  });
+  expect(
+    getPreferredMediaReference({ item: { ...item, references: [] } }),
+  ).toBeNull();
+});
+
+test("opens the preferred media source block in Roam's main window", async () => {
+  const originalWindow = globalThis.window;
+  let openedUid = "";
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      roamAlphaAPI: {
+        ui: {
+          mainWindow: {
+            openBlock: async ({
+              block,
+            }: {
+              block: { uid: string };
+            }): Promise<void> => {
+              openedUid = block.uid;
+            },
+          },
+        },
+      },
+    },
+    writable: true,
+  });
+
+  const item: MediaItem = {
+    ...sampleItems[0],
+    references: [
+      {
+        blockUid: "older-block",
+        pageUid: "page-1",
+        createdTime: 10,
+        updatedTime: 100,
+        createdAuthor: "Alice",
+        updatedAuthor: "Alice",
+      },
+      {
+        blockUid: "newer-block",
+        pageUid: "page-2",
+        createdTime: 20,
+        updatedTime: 200,
+        createdAuthor: "Bob",
+        updatedAuthor: "Bob",
+      },
+    ],
+  };
+
+  try {
+    await openMediaItemSource({ item });
+    expect(openedUid).toBe("newer-block");
+  } finally {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: originalWindow,
+      writable: true,
+    });
+  }
+});
+
+test("semantic filters include matches below the initial 24 and preserve similarity order", () => {
+  const items = Array.from({ length: 30 }, (_, index) => ({
+    ...sampleItems[0],
+    id: `${index}`,
+    url: `https://example.com/${index}.jpg`,
+    authors: [index >= 24 ? "Bob" : "Alice"],
+    updatedTime: 30 - index,
+  }));
+  const results = items.map((item, index) => ({
+    mediaId: item.id,
+    url: item.url,
+    fileName: item.fileName,
+    mimeType: item.mimeType,
+    mediaType: "image" as const,
+    preferredReference: null,
+    contentHash: item.id,
+    score: 1 - index / 100,
+    rank: index + 1,
+  }));
+  const filtered = applySemanticResultFilters({
+    results,
+    items,
+    filters: {
+      ...baseFilters(),
+      author: "Bob",
+      query: "unrelated keyword",
+      orientation: "portrait",
+      mediaType: "image",
+      createdFrom: "2026-01-01",
+      createdTo: "2026-01-01",
+      sortBy: "created",
+      sortDirection: "asc",
+    },
+  });
+  expect(filtered.map(({ mediaId }) => mediaId)).toEqual([
+    "24",
+    "25",
+    "26",
+    "27",
+    "28",
+    "29",
+  ]);
+  expect(
+    applySemanticResultFilters({
+      results,
+      items,
+      filters: { ...baseFilters(), orientation: "landscape" },
+    }),
+  ).toEqual([]);
+  expect(
+    applySemanticResultFilters({
+      results,
+      items,
+      filters: { ...baseFilters(), updatedFrom: "2026-01-01" },
+    }),
+  ).toEqual([]);
+  expect(
+    applySemanticResultFilters({
+      results,
+      items,
+      filters: { ...baseFilters(), mediaType: "video" },
+    }),
+  ).toEqual([]);
+  expect(results).toHaveLength(30);
+});
+
+test("opens each distinct referring block in the native sidebar without changing the graph", async () => {
+  const originalWindow = globalThis.window;
+  const actions: unknown[] = [];
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    writable: true,
+    value: {
+      roamAlphaAPI: {
+        ui: {
+          rightSidebar: {
+            addWindow: async (action: unknown): Promise<void> => {
+              actions.push(action);
+            },
+          },
+        },
+      },
+    },
+  });
+  try {
+    const reference = {
+      blockUid: "first",
+      pageUid: "page",
+      createdTime: null,
+      updatedTime: null,
+      createdAuthor: "Alice",
+      updatedAuthor: "Alice",
+    };
+    await openMediaItemReferences({
+      item: {
+        ...sampleItems[0],
+        references: [
+          reference,
+          { ...reference, blockUid: "second" },
+          reference,
+        ],
+      },
+    });
+    expect(actions).toEqual([
+      { window: { type: "block", "block-uid": "second" } },
+      { window: { type: "block", "block-uid": "first" } },
+    ]);
+    await openMediaItemReferences({ item: sampleItems[0] });
+    expect(actions).toHaveLength(2);
+  } finally {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      writable: true,
+      value: originalWindow,
+    });
+  }
 });

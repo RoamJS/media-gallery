@@ -1,3 +1,5 @@
+import type { SemanticSearchResult } from "~/types/semantic";
+
 import type { MediaFilters, MediaItem } from "~/types/media";
 
 const getDayStart = (value: string): number | null => {
@@ -139,4 +141,22 @@ export const applyMediaFilters = ({
     return true;
   });
   return sortItems({ items: filtered, filters });
+};
+
+// Rank the full index first so filters never discard matches below the display limit.
+export const applySemanticResultFilters = ({
+  results,
+  items,
+  filters,
+}: {
+  results: SemanticSearchResult[];
+  items: MediaItem[];
+  filters: MediaFilters;
+}): SemanticSearchResult[] => {
+  const allowedUrls = new Set(
+    applyMediaFilters({ items, filters: { ...filters, query: "" } }).map(
+      ({ url }) => url,
+    ),
+  );
+  return results.filter(({ url }) => allowedUrls.has(url));
 };

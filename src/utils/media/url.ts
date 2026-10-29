@@ -57,9 +57,9 @@ const DOCUMENT_EXTENSIONS = new Set([
 ]);
 
 const URL_REGEX = /https?:\/\/[^\s<>"']+/gi;
-const MARKDOWN_MEDIA_REGEX = /!?\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/gi;
+const MARKDOWN_MEDIA_REGEX = /(!?)\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/gi;
 const ROAM_MEDIA_MACRO_REGEX =
-  /\{\{\[\[(video|audio)\]\]:\s*(https?:\/\/[^}\s]+)\s*\}\}/gi;
+  /\{\{\s*(?:\[\[)?(video|audio)(?:\]\])?\s*:\s*(https?:\/\/[^}\s]+)\s*\}\}/gi;
 
 const TRAILING_CHARS = new Set([")", "]", "}", ">", ",", ".", ";", ":"]);
 
@@ -77,6 +77,11 @@ const toUrlOrNull = (raw: string): URL | null => {
   } catch (_e) {
     return null;
   }
+};
+
+export const isRoamStorageUrl = (raw: string): boolean => {
+  const url = toUrlOrNull(raw.trim());
+  return Boolean(url && MEDIA_HOSTS.has(url.hostname));
 };
 
 const safeDecodeURIComponent = (value: string): string => {
@@ -163,7 +168,20 @@ export const inferMimeType = ({
   return "application/octet-stream";
 };
 
-const shouldKeepUrl = (url: URL, extension: string): boolean => {
+type MediaTypeHint = Extract<MediaType, "image" | "video" | "audio">;
+
+const shouldKeepUrl = ({
+  url,
+  extension,
+  mediaTypeHint,
+}: {
+  url: URL;
+  extension: string;
+  mediaTypeHint?: MediaTypeHint;
+}): boolean => {
+  if (mediaTypeHint) {
+    return true;
+  }
   if (MEDIA_HOSTS.has(url.hostname)) {
     return true;
   }
@@ -190,9 +208,13 @@ export type ParsedMediaUrl = {
 
 export type ParsedMediaReference = ParsedMediaUrl & {
   searchText: string;
+  displayName: string;
 };
 
-export const parseMediaUrl = (raw: string): ParsedMediaUrl | null => {
+export const parseMediaUrl = (
+  raw: string,
+  mediaTypeHint?: MediaTypeHint,
+): ParsedMediaUrl | null => {
   const clean = stripTrailingChars(raw.trim());
   const parsed = toUrlOrNull(clean);
   if (!parsed) {
@@ -201,10 +223,14 @@ export const parseMediaUrl = (raw: string): ParsedMediaUrl | null => {
   const fullPath = decodeFirebaseObjectPath(parsed);
   const fileName = fullPath.split("/").pop() || parsed.hostname;
   const extension = getExtension(fileName);
-  if (!shouldKeepUrl(parsed, extension)) {
+  if (!shouldKeepUrl({ url: parsed, extension, mediaTypeHint })) {
     return null;
   }
-  const mediaType = classifyMediaType({ extension, mimeType: "" });
+  const classifiedMediaType = classifyMediaType({ extension, mimeType: "" });
+  const mediaType =
+    classifiedMediaType === "other" && mediaTypeHint
+      ? mediaTypeHint
+      : classifiedMediaType;
   const mimeType = inferMimeType({ mediaType, extension });
   return {
     url: clean,
@@ -228,19 +254,45 @@ const addSearchTerm = ({
   }
 };
 
-const getMarkdownSearchTermsByUrl = (
+type MediaReferenceMetadata = {
+  terms: string[];
+  mediaTypeHint?: MediaTypeHint;
+  displayName?: string;
+};
+
+const getMediaReferenceMetadataByUrl = (
   blockString: string,
-): Map<string, string[]> => {
-  const byUrl = new Map<string, Set<string>>();
-  const add = ({ url, term }: { url: string; term: string }): void => {
+): Map<string, MediaReferenceMetadata> => {
+  const byUrl = new Map<
+    string,
+    { terms: Set<string>; mediaTypeHint?: MediaTypeHint; displayName?: string }
+  >();
+  const add = ({
+    url,
+    term,
+    mediaTypeHint,
+    displayName,
+  }: {
+    url: string;
+    term: string;
+    mediaTypeHint?: MediaTypeHint;
+    displayName?: string;
+  }): void => {
     const key = stripTrailingChars(url.trim());
     if (!key) {
       return;
     }
     if (!byUrl.has(key)) {
-      byUrl.set(key, new Set<string>());
+      byUrl.set(key, { terms: new Set<string>(), mediaTypeHint, displayName });
     }
-    addSearchTerm({ all: byUrl.get(key) as Set<string>, term });
+    const metadata = byUrl.get(key) as {
+      terms: Set<string>;
+      mediaTypeHint?: MediaTypeHint;
+      displayName?: string;
+    };
+    addSearchTerm({ all: metadata.terms, term });
+    metadata.mediaTypeHint ||= mediaTypeHint;
+    metadata.displayName ||= displayName;
   };
 
   MARKDOWN_MEDIA_REGEX.lastIndex = 0;
@@ -249,8 +301,13 @@ const getMarkdownSearchTermsByUrl = (
     match;
     match = MARKDOWN_MEDIA_REGEX.exec(blockString)
   ) {
-    const [, label, url] = match;
-    add({ url, term: label || "" });
+    const [, imageMarker, label, url] = match;
+    add({
+      url,
+      term: label || "",
+      mediaTypeHint: imageMarker ? "image" : undefined,
+      displayName: label || undefined,
+    });
   }
 
   ROAM_MEDIA_MACRO_REGEX.lastIndex = 0;
@@ -260,11 +317,22 @@ const getMarkdownSearchTermsByUrl = (
     match = ROAM_MEDIA_MACRO_REGEX.exec(blockString)
   ) {
     const [, macroType, url] = match;
-    add({ url, term: macroType || "" });
+    add({
+      url,
+      term: macroType || "",
+      mediaTypeHint: macroType as MediaTypeHint,
+    });
   }
 
   return new Map(
-    Array.from(byUrl.entries()).map(([url, terms]) => [url, Array.from(terms)]),
+    Array.from(byUrl.entries()).map(([url, metadata]) => [
+      url,
+      {
+        terms: Array.from(metadata.terms),
+        mediaTypeHint: metadata.mediaTypeHint,
+        displayName: metadata.displayName,
+      },
+    ]),
   );
 };
 
@@ -272,34 +340,42 @@ export const extractMediaReferences = (
   blockString: string,
 ): ParsedMediaReference[] => {
   const matches = blockString.match(URL_REGEX) || [];
-  const markdownTermsByUrl = getMarkdownSearchTermsByUrl(blockString);
+  const metadataByUrl = getMediaReferenceMetadataByUrl(blockString);
   const byUrl = matches.reduce<
     Map<
       string,
       {
         parsed: ParsedMediaUrl;
         terms: Set<string>;
+        displayName: string;
       }
     >
   >((all, raw) => {
     try {
-      const parsed = parseMediaUrl(raw);
+      const metadata = metadataByUrl.get(stripTrailingChars(raw.trim()));
+      const parsed = parseMediaUrl(raw, metadata?.mediaTypeHint);
       if (parsed) {
         if (!all.has(parsed.url)) {
           const terms = new Set<string>();
           addSearchTerm({ all: terms, term: parsed.fileName });
-          markdownTermsByUrl.get(parsed.url)?.forEach((term) => {
+          metadata?.terms.forEach((term) => {
             addSearchTerm({ all: terms, term });
           });
-          all.set(parsed.url, { parsed, terms });
+          all.set(parsed.url, {
+            parsed,
+            terms,
+            displayName: metadata?.displayName || "",
+          });
         } else {
           const existing = all.get(parsed.url) as {
             parsed: ParsedMediaUrl;
             terms: Set<string>;
+            displayName: string;
           };
-          markdownTermsByUrl.get(parsed.url)?.forEach((term) => {
+          metadata?.terms.forEach((term) => {
             addSearchTerm({ all: existing.terms, term });
           });
+          existing.displayName ||= metadata?.displayName || "";
         }
       }
     } catch (_e) {
@@ -308,16 +384,18 @@ export const extractMediaReferences = (
     return all;
   }, new Map());
 
-  return Array.from(byUrl.values()).map(({ parsed, terms }) => ({
+  return Array.from(byUrl.values()).map(({ parsed, terms, displayName }) => ({
     ...parsed,
     searchText: Array.from(terms).join(" "),
+    displayName,
   }));
 };
 
 export const extractMediaUrls = (blockString: string): ParsedMediaUrl[] => {
   return extractMediaReferences(blockString).map(
-    ({ searchText, ...parsed }) => {
+    ({ searchText, displayName, ...parsed }) => {
       void searchText;
+      void displayName;
       return parsed;
     },
   );

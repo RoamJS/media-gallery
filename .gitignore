@@ -5,3 +5,12 @@ out
 .env
 extension.js
 extension.js.LICENSE.txt
+extension.js.map
+semantic.js
+semantic.js.LICENSE.txt
+semantic.js.map
+coverage
+local
+.roam-load-plugin
+
+.DS_Store
