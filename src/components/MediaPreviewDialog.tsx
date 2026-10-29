@@ -9,6 +9,7 @@ import {
   getSafeMediaUrl,
   type MediaAction,
 } from "~/components/MediaCard";
+import { getOriginalMediaSource } from "~/utils/media/source";
 import useMediaPreviewSource from "~/components/useMediaPreviewSource";
 
 import type { MediaItem } from "~/types/media";
@@ -48,19 +49,24 @@ const MediaPreviewDialog = ({
       setFailedUrl(null);
     }
   }, [isOpen, item?.url]);
+  const supportsPreview = Boolean(
+    item && ["image", "gif", "video", "audio"].includes(item.mediaType),
+  );
   const {
     url: previewUrl,
     loading: previewLoading,
     failed: sourceFailed,
-  } = useMediaPreviewSource(isOpen && item ? getSafeMediaUrl(item.url) : null);
+  } = useMediaPreviewSource(
+    isOpen && item && supportsPreview ? getSafeMediaUrl(item.url) : null,
+  );
   if (!item) {
     return null;
   }
   const safeUrl = getSafeMediaUrl(item.url);
+  const originalUrl = getOriginalMediaSource(item.url);
   const previewFailed = failedUrl === item.url || !safeUrl || sourceFailed;
   const isImage = item.mediaType === "image" || item.mediaType === "gif";
-  const canPreview =
-    isImage || item.mediaType === "video" || item.mediaType === "audio";
+  const canPreview = supportsPreview;
   const size = formatMediaSize(item.sizeBytes);
   const referenceCount = new Set(
     item.references.map(({ blockUid }) => blockUid),
@@ -127,14 +133,15 @@ const MediaPreviewDialog = ({
                   ? "Retrieving this file through Roam…"
                   : !safeUrl
                     ? "This file does not have a supported web address. Open its source to inspect the reference."
-                    : canPreview
-                      ? "Open the original file or download it to view it in another app."
-                      : "Open this file in a new tab or download the original."}
+                    : !originalUrl
+                      ? "Download the original file to view it in another app."
+                      : canPreview
+                        ? "Open the original file or download it to view it in another app."
+                        : "Open this file in a new tab or download the original."}
               </p>
-              {safeUrl ? (
+              {originalUrl ? (
                 <AnchorButton
-                  href={previewUrl || undefined}
-                  disabled={!previewUrl}
+                  href={originalUrl || undefined}
                   target="_blank"
                   rel="noopener noreferrer"
                   icon="share"
@@ -209,10 +216,9 @@ const MediaPreviewDialog = ({
             disabled={!safeUrl}
             onClick={() => onDownload(item)}
           />
-          {safeUrl && canPreview && !previewFailed ? (
+          {originalUrl && canPreview && !previewFailed ? (
             <AnchorButton
-              href={previewUrl || undefined}
-              disabled={!previewUrl}
+              href={originalUrl || undefined}
               target="_blank"
               rel="noopener noreferrer"
               icon="share"

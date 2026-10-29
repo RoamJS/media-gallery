@@ -28,6 +28,8 @@
 
 ### Fixed
 
+- Keep encrypted originals in the download flow for safe opening outside Roam.
+
 - Merge explicit media types and labels across duplicate references so extensionless images remain previewable and searchable regardless of query order.
 
 - Retrieve encrypted Roam media through its decryption API for previews, orientation checks, and local semantic indexing.

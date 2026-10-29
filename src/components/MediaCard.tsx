@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Button, Icon, type IconName } from "@blueprintjs/core";
 
+import { getSafeMediaUrl } from "~/utils/media/url";
 import useMediaPreviewSource from "~/components/useMediaPreviewSource";
 
 import type { MediaItem } from "~/types/media";
@@ -21,16 +22,7 @@ export type MediaCardProps = {
   onImageLoad?: (args: { itemId: string; image: HTMLImageElement }) => void;
 };
 
-export const getSafeMediaUrl = (url: string): string | null => {
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "https:" || parsed.protocol === "http:"
-      ? parsed.href
-      : null;
-  } catch {
-    return null;
-  }
-};
+export { getSafeMediaUrl } from "~/utils/media/url";
 
 export const canCopyMediaImage = (item: MediaItem): boolean =>
   ["image/png", "image/jpeg", "image/jpg", "image/bmp"].includes(

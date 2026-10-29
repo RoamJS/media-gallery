@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   getDecryptedMediaBlob,
+  getOriginalMediaSource,
   resolveMediaPreviewSource,
 } from "../src/utils/media/source";
 
@@ -96,4 +97,68 @@ test("cancellation settles while Roam retrieval is pending", async () => {
   controller.abort();
   await expect(pending).rejects.toMatchObject({ name: "AbortError" });
   finish?.(new File(["late plaintext"], "image.png"));
+});
+
+test("encrypted originals never expose a document-opening URL, including active HTML and SVG", () => {
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: { roamAlphaAPI: { graph: { isEncrypted: true } } },
+  });
+  for (const extension of ["html", "svg", "xhtml", "pdf", "png"]) {
+    expect(
+      getOriginalMediaSource(url.replace("secret.png", `secret.${extension}`)),
+    ).toBeNull();
+  }
+  expect(
+    getOriginalMediaSource("blob:https://roamresearch.com/decrypted-document"),
+  ).toBeNull();
+});
+
+test("ordinary originals keep their web origin and reject executable or blob URLs", () => {
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: { roamAlphaAPI: { graph: { isEncrypted: false } } },
+  });
+  expect(getOriginalMediaSource(url)).toBe(url);
+  expect(getOriginalMediaSource("https://example.com/file.svg")).toBe(
+    "https://example.com/file.svg",
+  );
+  for (const unsafe of [
+    "blob:https://roamresearch.com/file",
+    "javascript:alert(1)",
+    "data:text/html,script",
+  ])
+    expect(getOriginalMediaSource(unsafe)).toBeNull();
+});
+
+test("active encrypted content is rejected before creating any preview blob URL", async () => {
+  let creations = 0;
+  URL.createObjectURL = (): string => {
+    creations++;
+    return "blob:unsafe";
+  };
+  for (const mimeType of [
+    "image/svg+xml",
+    "text/html",
+    "application/xhtml+xml",
+    "application/octet-stream",
+    "",
+  ]) {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        roamAlphaAPI: {
+          graph: { isEncrypted: true },
+          file: {
+            get: async (): Promise<File> =>
+              new File(["active document"], "file", { type: mimeType }),
+          },
+        },
+      },
+    });
+    await expect(resolveMediaPreviewSource(url)).rejects.toThrow(
+      "must be downloaded",
+    );
+  }
+  expect(creations).toBe(0);
 });

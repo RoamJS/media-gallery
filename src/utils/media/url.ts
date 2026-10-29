@@ -416,3 +416,14 @@ export const inferOrientation = ({
   }
   return width > height ? "landscape" : "portrait";
 };
+
+export const getSafeMediaUrl = (url: string): string | null => {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:"
+      ? parsed.href
+      : null;
+  } catch {
+    return null;
+  }
+};
