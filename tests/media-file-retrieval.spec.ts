@@ -371,3 +371,37 @@ for (const mediaType of ["image", "gif", "video", "audio"] as const) {
     });
   });
 }
+
+for (const { name, mime, mediaType } of [
+  { name: "Photo.png", mime: "image/png", mediaType: "image" },
+  { name: "Photo", mime: "image/jpeg", mediaType: "image" },
+  { name: "Animation.gif", mime: "image/gif", mediaType: "image" },
+  { name: "Clip.mp4", mime: "video/mp4", mediaType: "video" },
+  { name: "Recording.mp3", mime: "audio/mpeg", mediaType: "audio" },
+  { name: "Photo.png", mime: "", mediaType: "image" },
+  { name: "Clip.mp4", mime: "", mediaType: "video" },
+  { name: "Recording.wav", mime: "", mediaType: "audio" },
+]) {
+  test(`preserves ${name} media markup for opaque upload URLs with MIME ${mime || "unavailable"}`, async () => {
+    const url =
+      "https://firebasestorage.googleapis.com/v0/b/graph/o/opaque-id?alt=media";
+    const context = setRoamUploadContext({
+      upload: async (): Promise<string> => url,
+    });
+    await uploadFileAndCreateReference({
+      file: new File(["file bytes"], name, { type: mime }),
+      parentUid: "upload-destination",
+    });
+    const text = context.createdBlocks[0].text;
+    expect(text).toBe(
+      mediaType === "image"
+        ? `![${name}](${url})`
+        : `{{[[${mediaType}]]: ${url}}} [${name}](${url})`,
+    );
+    expect(extractMediaReferences(text)[0]).toMatchObject({
+      url,
+      displayName: name,
+      mediaType,
+    });
+  });
+}

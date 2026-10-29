@@ -8,6 +8,8 @@ import {
   type MediaCopyResult,
 } from "~/utils/media/clipboard";
 import {
+  classifyMediaType,
+  getExtension,
   extractMediaReferences,
   inferOrientation,
   isRoamStorageUrl,
@@ -573,11 +575,20 @@ export const uploadFileAndCreateReference = async ({
   const parentUid = await getOrCreateUploadsParentUid({
     parentUid: capturedParentUid,
   });
+  const uploadedMediaType = classifyMediaType({
+    extension: getExtension(fileName),
+    mimeType: file.type,
+  });
   const blockUid = await createBlock({
     parentUid,
     order: "last",
     node: {
-      text: formatUploadedMediaReference({ url, fileName }),
+      text: formatUploadedMediaReference({
+        url,
+        fileName,
+        mediaType:
+          uploadedMediaType === "other" ? undefined : uploadedMediaType,
+      }),
     },
   });
   await waitForBlockToBeQueryable({ blockUid });

@@ -28,6 +28,8 @@
 
 ### Fixed
 
+- Preserve uploaded image/audio/video references when Roam returns an extensionless storage URL.
+
 - Keep encrypted originals in the download flow for safe opening outside Roam.
 
 - Merge explicit media types and labels across duplicate references so extensionless images remain previewable and searchable regardless of query order.
