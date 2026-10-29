@@ -1,3 +1,8 @@
+import {
+  isEncryptedRoamMedia,
+  resolveMediaPreviewSource,
+} from "~/utils/media/source";
+
 import type { MediaItem } from "~/types/media";
 import { inferOrientation } from "~/utils/media/url";
 
@@ -71,6 +76,7 @@ export const loadImageDimensions: MediaDimensionLoader = ({
     }
     const image = new Image();
     let settled = false;
+    let release: (() => void) | undefined;
     let timer: ReturnType<typeof setTimeout>;
     const finish = (result: MediaDimensions | Error): void => {
       if (settled) {
@@ -82,6 +88,7 @@ export const loadImageDimensions: MediaDimensionLoader = ({
       image.onload = null;
       image.onerror = null;
       image.removeAttribute("src");
+      release?.();
       if (result instanceof Error) {
         reject(result);
       } else {
@@ -108,7 +115,26 @@ export const loadImageDimensions: MediaDimensionLoader = ({
       timeoutMs,
     );
     // Natural dimensions do not require canvas pixel access or a CORS-enabled host.
-    image.src = url;
+    if (!isEncryptedRoamMedia(url)) {
+      image.src = url;
+      return;
+    }
+    void resolveMediaPreviewSource(url)
+      .then((source) => {
+        if (settled) {
+          source.release();
+          return;
+        }
+        release = source.release;
+        image.src = source.url;
+      })
+      .catch((error: unknown) =>
+        finish(
+          error instanceof Error
+            ? error
+            : new Error("Could not retrieve the image."),
+        ),
+      );
   });
 
 const applyDimensions = ({

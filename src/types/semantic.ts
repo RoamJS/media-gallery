@@ -112,7 +112,9 @@ export type SemanticFetchAndHashResult = {
   unchanged: boolean;
 };
 
-export type SemanticEmbeddingCandidate = SemanticHashedCandidate;
+export type SemanticEmbeddingCandidate = SemanticHashedCandidate & {
+  imageBlob?: Blob;
+};
 
 export type SemanticImageEmbedding = {
   mediaId: string;
@@ -171,6 +173,7 @@ export type SemanticWorkerRequest =
       requestId: string;
       type: "fetchAndHash";
       url: string;
+      imageBlob?: Blob;
       knownContentHash?: string;
     }
   | {

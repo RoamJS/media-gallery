@@ -482,22 +482,32 @@ const sanitizeMarkdownLabel = (value: string): string =>
 export const formatUploadedMediaReference = ({
   url,
   fileName,
+  mediaType,
 }: {
   url: string;
   fileName: string;
+  mediaType?: MediaItem["mediaType"];
 }): string => {
-  const parsed = parseMediaUrl(url);
+  const parsed = parseMediaUrl(
+    url,
+    mediaType === "gif"
+      ? "image"
+      : mediaType === "image" || mediaType === "video" || mediaType === "audio"
+        ? mediaType
+        : undefined,
+  );
   if (!parsed) {
     return url;
   }
   const label = sanitizeMarkdownLabel(fileName);
-  if (parsed.mediaType === "image" || parsed.mediaType === "gif") {
+  const detectedType = mediaType || parsed.mediaType;
+  if (detectedType === "image" || detectedType === "gif") {
     return `![${label}](${url})`;
   }
-  if (parsed.mediaType === "video") {
+  if (detectedType === "video") {
     return `{{[[video]]: ${url}}} [${label}](${url})`;
   }
-  if (parsed.mediaType === "audio") {
+  if (detectedType === "audio") {
     return `{{[[audio]]: ${url}}} [${label}](${url})`;
   }
   return `[${label}](${url})`;

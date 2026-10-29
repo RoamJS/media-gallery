@@ -28,6 +28,10 @@
 
 ### Fixed
 
+- Retrieve encrypted Roam media through its decryption API for previews, orientation checks, and local semantic indexing.
+- Preserve known media types when copying Markdown for extensionless image/audio/video URLs.
+- Update the image-search runtime to remove its newly introduced Node dependency advisories.
+
 - Use the model's full-precision image encoder for correct semantic rankings and rebuild older indexes instead of reusing incompatible image embeddings.
 - Preserve uploaded file names in the block references created by the gallery.
 - Capture the upload destination before the gallery takes focus and preserve it while files upload.

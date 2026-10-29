@@ -351,3 +351,23 @@ test("keeps document filename labels parseable when filenames contain Markdown b
     mediaType: "pdf",
   });
 });
+
+for (const mediaType of ["image", "gif", "video", "audio"] as const) {
+  test(`Copy Markdown preserves explicit ${mediaType} type for extensionless URLs`, () => {
+    const url = "https://example.com/media?id=123";
+    const formatted = formatUploadedMediaReference({
+      url,
+      fileName: "Whiteboard",
+      mediaType,
+    });
+    expect(formatted).toBe(
+      mediaType === "image" || mediaType === "gif"
+        ? `![Whiteboard](${url})`
+        : `{{[[${mediaType}]]: ${url}}} [Whiteboard](${url})`,
+    );
+    expect(extractMediaReferences(formatted)[0]).toMatchObject({
+      url,
+      mediaType: mediaType === "gif" ? "image" : mediaType,
+    });
+  });
+}

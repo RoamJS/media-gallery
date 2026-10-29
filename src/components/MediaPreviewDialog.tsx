@@ -9,6 +9,8 @@ import {
   getSafeMediaUrl,
   type MediaAction,
 } from "~/components/MediaCard";
+import useMediaPreviewSource from "~/components/useMediaPreviewSource";
+
 import type { MediaItem } from "~/types/media";
 
 export type MediaPreviewDialogProps = {
@@ -46,11 +48,16 @@ const MediaPreviewDialog = ({
       setFailedUrl(null);
     }
   }, [isOpen, item?.url]);
+  const {
+    url: previewUrl,
+    loading: previewLoading,
+    failed: sourceFailed,
+  } = useMediaPreviewSource(isOpen && item ? getSafeMediaUrl(item.url) : null);
   if (!item) {
     return null;
   }
   const safeUrl = getSafeMediaUrl(item.url);
-  const previewFailed = failedUrl === item.url || !safeUrl;
+  const previewFailed = failedUrl === item.url || !safeUrl || sourceFailed;
   const isImage = item.mediaType === "image" || item.mediaType === "gif";
   const canPreview =
     isImage || item.mediaType === "video" || item.mediaType === "audio";
@@ -78,27 +85,27 @@ const MediaPreviewDialog = ({
     >
       <div className="bp3-dialog-body roamjs-media-gallery-preview-body">
         <div className="roamjs-media-gallery-preview-stage">
-          {safeUrl && !previewFailed && isImage ? (
+          {previewUrl && !previewFailed && isImage ? (
             <img
               className="roamjs-media-gallery-full-image"
-              src={safeUrl}
+              src={previewUrl || undefined}
               alt={item.fileName}
               onError={() => setFailedUrl(item.url)}
             />
-          ) : safeUrl && !previewFailed && item.mediaType === "video" ? (
+          ) : previewUrl && !previewFailed && item.mediaType === "video" ? (
             <video
               className="roamjs-media-gallery-full-video"
-              src={safeUrl}
+              src={previewUrl || undefined}
               controls
               preload="metadata"
               aria-label={item.fileName}
               onError={() => setFailedUrl(item.url)}
             />
-          ) : safeUrl && !previewFailed && item.mediaType === "audio" ? (
+          ) : previewUrl && !previewFailed && item.mediaType === "audio" ? (
             <div className="roamjs-media-gallery-audio-preview">
               <Icon icon="volume-up" iconSize={40} />
               <audio
-                src={safeUrl}
+                src={previewUrl || undefined}
                 controls
                 preload="metadata"
                 aria-label={item.fileName}
@@ -109,20 +116,25 @@ const MediaPreviewDialog = ({
             <div className="roamjs-media-gallery-preview-placeholder">
               <Icon icon={getMediaTypeIcon(item)} iconSize={40} />
               <h3>
-                {previewFailed && canPreview
-                  ? "Preview unavailable"
-                  : getMediaTypeLabel(item)}
+                {previewLoading
+                  ? "Loading preview…"
+                  : previewFailed && canPreview
+                    ? "Preview unavailable"
+                    : getMediaTypeLabel(item)}
               </h3>
               <p>
-                {!safeUrl
-                  ? "This file does not have a supported web address. Open its source to inspect the reference."
-                  : canPreview
-                    ? "Open the original file or download it to view it in another app."
-                    : "Open this file in a new tab or download the original."}
+                {previewLoading
+                  ? "Retrieving this file through Roam…"
+                  : !safeUrl
+                    ? "This file does not have a supported web address. Open its source to inspect the reference."
+                    : canPreview
+                      ? "Open the original file or download it to view it in another app."
+                      : "Open this file in a new tab or download the original."}
               </p>
               {safeUrl ? (
                 <AnchorButton
-                  href={safeUrl}
+                  href={previewUrl || undefined}
+                  disabled={!previewUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   icon="share"
@@ -199,7 +211,8 @@ const MediaPreviewDialog = ({
           />
           {safeUrl && canPreview && !previewFailed ? (
             <AnchorButton
-              href={safeUrl}
+              href={previewUrl || undefined}
+              disabled={!previewUrl}
               target="_blank"
               rel="noopener noreferrer"
               icon="share"

@@ -17,7 +17,7 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@huggingface/transformers": "4.2.0",
+    "@huggingface/transformers": "4.3.2",
     "roamjs-components": "^0.86.4"
   },
   "devDependencies": {

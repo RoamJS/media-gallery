@@ -1,4 +1,9 @@
+import {
+  getDecryptedMediaBlob,
+  isEncryptedRoamMedia,
+} from "~/utils/media/source";
 import type {
+  SemanticEmbedImagesResult,
   SemanticProgressCallback,
   SemanticWorkerClient,
   SemanticWorkerRequest,
@@ -385,11 +390,16 @@ export const createSemanticWorkerClient = (
       return response.model;
     },
     fetchAndHash: async ({ url, knownContentHash, signal }) => {
+      if (signal?.aborted) throw createAbortError();
+      const imageBlob = isEncryptedRoamMedia(url)
+        ? await getDecryptedMediaBlob(url, signal)
+        : null;
       const response = await request({
         buildRequest: (requestId) => ({
           requestId,
           type: "fetchAndHash",
           url,
+          ...(imageBlob ? { imageBlob } : {}),
           ...(knownContentHash ? { knownContentHash } : {}),
         }),
         signal,
@@ -402,6 +412,58 @@ export const createSemanticWorkerClient = (
       return response.result;
     },
     embedImages: async ({ candidates, onProgress, signal }) => {
+      if (candidates.some(({ url }) => isEncryptedRoamMedia(url))) {
+        const result: SemanticEmbedImagesResult = {
+          embeddings: [],
+          skipped: [],
+        };
+        for (const [index, candidate] of candidates.entries()) {
+          if (signal?.aborted) throw createAbortError();
+          let imageBlob: Blob | null;
+          try {
+            imageBlob = await getDecryptedMediaBlob(candidate.url, signal);
+          } catch (error) {
+            if (signal?.aborted) throw createAbortError();
+            result.skipped.push({
+              mediaId: candidate.mediaId,
+              url: candidate.url,
+              stage: "fetch",
+              reason:
+                error instanceof Error
+                  ? error.message
+                  : "Could not decrypt the image.",
+            });
+            onProgress?.({
+              phase: "embedding",
+              completed: index + 1,
+              total: candidates.length,
+            });
+            continue;
+          }
+          const response = await request({
+            buildRequest: (requestId) => ({
+              requestId,
+              type: "embedImages",
+              candidates: [
+                { ...candidate, ...(imageBlob ? { imageBlob } : {}) },
+              ],
+            }),
+            signal,
+          });
+          if (response.type !== "embedImagesResult")
+            throw new Error(
+              `Unexpected semantic worker response: ${response.type}`,
+            );
+          result.embeddings.push(...response.result.embeddings);
+          result.skipped.push(...response.result.skipped);
+          onProgress?.({
+            phase: "embedding",
+            completed: index + 1,
+            total: candidates.length,
+          });
+        }
+        return result;
+      }
       const response = await request({
         buildRequest: (requestId) => ({
           requestId,

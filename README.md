@@ -49,7 +49,9 @@ Each semantic thumbnail shows its cosine similarity as a percentage, for example
 
 Older image indexes show **Update needed** after the model configuration changes. Choose **Update index** to rebuild their image data; incompatible vectors are replaced even when the image files have not changed.
 
-The index is opt-in and scoped to the current graph. Image fingerprints, metadata, and normalized vectors are stored locally in IndexedDB; they are not written into your graph. You can clear the current graph's index from the semantic search view or the extension settings. Opening the ordinary gallery does not load the model.
+For encrypted Roam graphs, hosted files are retrieved through Roam’s file API before previewing, measuring dimensions, or sending decrypted image bytes to the local worker. Decrypted preview URLs are temporary and released when no longer needed.
+
+The index is opt-in and scoped to the current graph. Image fingerprints, metadata, and normalized vectors are stored locally in IndexedDB; they are not written into your graph. You can clear the current graph's index from the semantic search view or the extension settings. Opening the ordinary gallery does not load the model. Model assets come from Hugging Face and the inference runtime’s CDN; search descriptions and image embeddings are processed locally, with no remote inference service. Indexing fetches eligible images from their existing hosts.
 
 ## Current limitations
 

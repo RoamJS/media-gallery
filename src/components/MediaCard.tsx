@@ -1,5 +1,7 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Button, Icon, type IconName } from "@blueprintjs/core";
+
+import useMediaPreviewSource from "~/components/useMediaPreviewSource";
 
 import type { MediaItem } from "~/types/media";
 import { formatSimilarityScore } from "~/utils/semantic/score";
@@ -92,7 +94,28 @@ const MediaCard = ({
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const safeUrl = getSafeMediaUrl(item.url);
   const isImage = item.mediaType === "image" || item.mediaType === "gif";
-  const previewFailed = failedUrl === item.url || !safeUrl;
+  const cardRef = useRef<HTMLElement>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const element = cardRef.current;
+    if (!element) return;
+    if (typeof IntersectionObserver === "undefined") {
+      setVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => setVisible(entry.isIntersecting),
+      { rootMargin: "200px" },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  const {
+    url: previewUrl,
+    loading: previewLoading,
+    failed: sourceFailed,
+  } = useMediaPreviewSource(isImage && visible ? safeUrl : null);
+  const previewFailed = failedUrl === item.url || !safeUrl || sourceFailed;
   const metadata = [
     getMediaTypeLabel(item),
     formatMediaSize(item.sizeBytes),
@@ -107,7 +130,7 @@ const MediaCard = ({
   const similarityLabel = formatSimilarityScore(similarityScore);
 
   return (
-    <article className="roamjs-media-gallery-card">
+    <article ref={cardRef} className="roamjs-media-gallery-card">
       <Button
         minimal
         fill
@@ -118,9 +141,9 @@ const MediaCard = ({
           onPreview(item);
         }}
       >
-        {isImage && !previewFailed ? (
+        {isImage && !previewFailed && previewUrl ? (
           <img
-            src={safeUrl || undefined}
+            src={previewUrl || undefined}
             alt=""
             className="roamjs-media-gallery-thumbnail-image"
             loading="lazy"
@@ -134,7 +157,11 @@ const MediaCard = ({
           <span className="roamjs-media-gallery-file-placeholder">
             <Icon icon={getMediaTypeIcon(item)} iconSize={28} />
             <span>
-              {isImage ? "Preview unavailable" : getMediaTypeLabel(item)}
+              {isImage
+                ? previewLoading
+                  ? "Loading preview…"
+                  : "Preview unavailable"
+                : getMediaTypeLabel(item)}
             </span>
             <span className="roamjs-media-gallery-file-placeholder-hint">
               {isImage ? "View details" : "Open preview"}

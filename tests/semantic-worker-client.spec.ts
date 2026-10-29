@@ -487,3 +487,72 @@ test("revokes a failed worker-constructor URL and allows another attempt", async
   client.terminate();
   expect(revokedUrls).toEqual(["blob:constructor-1", "blob:constructor-2"]);
 });
+
+test("passes decrypted Roam bytes to hashing and embeds encrypted images one at a time", async () => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const urls = [
+    "https://firebasestorage.googleapis.com/v0/b/test/o/a.png",
+    "https://firebasestorage.googleapis.com/v0/b/test/o/b.png",
+  ];
+  const reads: string[] = [];
+  const file = new File(["decrypted pixels"], "image.png", {
+    type: "image/png",
+  });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      roamAlphaAPI: {
+        graph: { isEncrypted: true },
+        file: {
+          get: async ({ url }: { url: string }): Promise<File> => {
+            reads.push(url);
+            return file;
+          },
+        },
+      },
+    },
+  });
+  const harness = createHarness();
+  harness.fakeWorker.onRequest = (request): void => {
+    if (request.type === "fetchAndHash") {
+      expect(request.imageBlob).toBe(file);
+      harness.fakeWorker.respond({
+        requestId: request.requestId,
+        type: "fetchAndHashResult",
+        result: { contentHash: "plaintext-hash", unchanged: false },
+      });
+    } else if (request.type === "embedImages") {
+      expect(request.candidates).toHaveLength(1);
+      expect(request.candidates[0].imageBlob).toBe(file);
+      harness.fakeWorker.respond({
+        requestId: request.requestId,
+        type: "embedImagesResult",
+        result: { embeddings: [], skipped: [] },
+      });
+    }
+  };
+  try {
+    await expect(
+      harness.client.fetchAndHash({ url: urls[0] }),
+    ).resolves.toEqual({ contentHash: "plaintext-hash", unchanged: false });
+    await harness.client.embedImages({
+      candidates: urls.map((url, index) => ({
+        mediaId: `${index}`,
+        url,
+        fileName: "image.png",
+        mediaType: "image",
+        mimeType: "image/png",
+        preferredReference: null,
+        contentHash: "plaintext-hash",
+      })),
+    });
+    expect(reads).toEqual([urls[0], ...urls]);
+    expect(
+      harness.fakeWorker.requests.filter((r) => r.type === "embedImages"),
+    ).toHaveLength(2);
+  } finally {
+    harness.client.terminate();
+    if (original) Object.defineProperty(globalThis, "window", original);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
+});

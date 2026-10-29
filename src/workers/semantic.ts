@@ -299,10 +299,20 @@ const hashBytes = async (bytes: ArrayBuffer): Promise<string> => {
 const fetchImage = async ({
   url,
   signal,
+  imageBlob,
 }: {
   url: string;
   signal: AbortSignal;
+  imageBlob?: Blob;
 }): Promise<CachedSemanticImage> => {
+  if (imageBlob) {
+    const bytes = await imageBlob.arrayBuffer();
+    throwIfAborted(signal);
+    const image = { blob: imageBlob, contentHash: await hashBytes(bytes) };
+    throwIfAborted(signal);
+    cachedImages.set({ url, image });
+    return image;
+  }
   let response: Response;
 
   try {
@@ -345,12 +355,14 @@ const fetchAndHash = async ({
   url,
   knownContentHash,
   signal,
+  imageBlob,
 }: {
   url: string;
   knownContentHash?: string;
   signal: AbortSignal;
+  imageBlob?: Blob;
 }): Promise<SemanticFetchAndHashResult> => {
-  const image = await fetchImage({ url, signal });
+  const image = await fetchImage({ url, signal, imageBlob });
   const unchanged =
     typeof knownContentHash === "string" &&
     knownContentHash === image.contentHash;
@@ -428,6 +440,12 @@ const getImageForEmbedding = async ({
   candidate: SemanticEmbeddingCandidate;
   signal: AbortSignal;
 }): Promise<CachedSemanticImage> => {
+  if (candidate.imageBlob)
+    return fetchImage({
+      url: candidate.url,
+      signal,
+      imageBlob: candidate.imageBlob,
+    });
   const cachedImage = cachedImages.get({
     url: candidate.url,
     contentHash: candidate.contentHash,
@@ -701,6 +719,7 @@ const handleRequest = async (request: SemanticWorkerRequest): Promise<void> => {
         const result = await fetchAndHash({
           url: request.url,
           knownContentHash: request.knownContentHash,
+          imageBlob: request.imageBlob,
           signal: controller.signal,
         });
         onProgress({
