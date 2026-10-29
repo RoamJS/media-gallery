@@ -358,6 +358,13 @@ export const queryAllMediaItems = async (): Promise<MediaItem[]> => {
         });
         return;
       }
+      if (existing.mediaType === "other" && parsed.mediaType !== "other") {
+        existing.mediaType = parsed.mediaType;
+        existing.mimeType = parsed.mimeType;
+      }
+      if (parsed.displayName && existing.fileName === parsed.fileName) {
+        existing.fileName = parsed.displayName;
+      }
       existing.references.push(reference);
       existing.authors = mergeAuthorLists({
         existing: existing.authors,

@@ -28,6 +28,8 @@
 
 ### Fixed
 
+- Merge explicit media types and labels across duplicate references so extensionless images remain previewable and searchable regardless of query order.
+
 - Retrieve encrypted Roam media through its decryption API for previews, orientation checks, and local semantic indexing.
 - Preserve known media types when copying Markdown for extensionless image/audio/video URLs.
 - Update the image-search runtime to remove its newly introduced Node dependency advisories.
