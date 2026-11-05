@@ -57,7 +57,7 @@ const DOCUMENT_EXTENSIONS = new Set([
 ]);
 
 const URL_REGEX = /https?:\/\/[^\s<>"']+/gi;
-const MARKDOWN_MEDIA_REGEX = /(!?)\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/gi;
+const MARKDOWN_MEDIA_START_REGEX = /(!?)\[([^\]]*)\]\((https?:\/\/)/gi;
 const ROAM_MEDIA_MACRO_REGEX =
   /\{\{\s*(?:\[\[)?(video|audio)(?:\]\])?\s*:\s*(https?:\/\/[^}\s]+)\s*\}\}/gi;
 
@@ -65,7 +65,15 @@ const TRAILING_CHARS = new Set([")", "]", "}", ">", ",", ".", ";", ":"]);
 
 const stripTrailingChars = (raw: string): string => {
   let output = raw;
+  const openingParentheses = (raw.match(/\(/g) || []).length;
+  let closingParentheses = (raw.match(/\)/g) || []).length;
   while (output.length > 0 && TRAILING_CHARS.has(output[output.length - 1])) {
+    if (output.endsWith(")")) {
+      if (closingParentheses <= openingParentheses) {
+        break;
+      }
+      closingParentheses -= 1;
+    }
     output = output.slice(0, -1);
   }
   return output;
@@ -260,6 +268,31 @@ type MediaReferenceMetadata = {
   displayName?: string;
 };
 
+const findMarkdownTargetEnd = ({
+  text,
+  start,
+}: {
+  text: string;
+  start: number;
+}): number | null => {
+  let depth = 0;
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index];
+    if (/\s/.test(char)) {
+      return null;
+    }
+    if (char === "(") {
+      depth += 1;
+    } else if (char === ")") {
+      if (depth === 0) {
+        return index;
+      }
+      depth -= 1;
+    }
+  }
+  return null;
+};
+
 const getMediaReferenceData = (
   blockString: string,
 ): {
@@ -301,15 +334,22 @@ const getMediaReferenceData = (
     metadata.displayName ||= displayName;
   };
 
-  MARKDOWN_MEDIA_REGEX.lastIndex = 0;
+  MARKDOWN_MEDIA_START_REGEX.lastIndex = 0;
   for (
-    let match = MARKDOWN_MEDIA_REGEX.exec(blockString);
+    let match = MARKDOWN_MEDIA_START_REGEX.exec(blockString);
     match;
-    match = MARKDOWN_MEDIA_REGEX.exec(blockString)
+    match = MARKDOWN_MEDIA_START_REGEX.exec(blockString)
   ) {
-    const [, imageMarker, label, url] = match;
+    const [, imageMarker, label, protocol] = match;
+    const start = match.index + match[0].length - protocol.length;
+    const end = findMarkdownTargetEnd({ text: blockString, start });
+    if (end === null) {
+      continue;
+    }
+    const url = blockString.slice(start, end);
+    MARKDOWN_MEDIA_START_REGEX.lastIndex = end + 1;
     matches.push({ url, index: match.index });
-    plainText.fill(" ", match.index, match.index + match[0].length);
+    plainText.fill(" ", match.index, end + 1);
     add({
       url,
       term: label || "",

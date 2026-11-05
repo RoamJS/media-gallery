@@ -181,6 +181,48 @@ test("preserves plain URLs around recognized references and deduplicates repeats
   expect(refs[1].searchText).toContain("Again");
 });
 
+for (const url of [
+  "https://example.com/photo(1).png",
+  "https://example.com/gallery((1)).png",
+  "https://example.com/render?crop=(center)",
+  "https://example.com/photo(1)",
+  "https://commons.wikimedia.org/wiki/File:Red_vintage_car_in_La_Habana_(10108264664).jpg",
+]) {
+  test(`preserves balanced parentheses in Markdown media URL: ${url}`, () => {
+    const refs = extractMediaReferences(`![Photo](${url})`);
+
+    expect(refs).toHaveLength(1);
+    expect(refs[0]).toMatchObject({
+      url,
+      mediaType: "image",
+      displayName: "Photo",
+    });
+  });
+}
+
+test("keeps adjacent balanced Markdown targets separate from a plain URL", () => {
+  const refs = extractMediaReferences(
+    "![Photo](https://example.com/photo(1).png)[Spec](https://example.com/spec(2).pdf)https://example.com/after.jpg",
+  );
+
+  expect(refs.map(({ url, mediaType }) => ({ url, mediaType }))).toEqual([
+    { url: "https://example.com/photo(1).png", mediaType: "image" },
+    { url: "https://example.com/spec(2).pdf", mediaType: "pdf" },
+    { url: "https://example.com/after.jpg", mediaType: "image" },
+  ]);
+});
+
+test("retains encoded parentheses and quoted-title URL fallback", () => {
+  const refs = extractMediaReferences(
+    '![Photo](https://example.com/photo%281%29.png) ![Other](https://example.com/other(2).png "Photo title")',
+  );
+
+  expect(refs.map(({ url }) => url)).toEqual([
+    "https://example.com/photo%281%29.png",
+    "https://example.com/other(2).png",
+  ]);
+});
+
 test("uses explicit media markup when URLs have no file extension", () => {
   const refs = extractMediaReferences(
     "![RoamJS logo](https://avatars.githubusercontent.com/u/138642184) {{video: https://media.example.com/stream}}",
