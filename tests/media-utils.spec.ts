@@ -124,6 +124,63 @@ test("extracts markdown text as searchable content", () => {
   );
 });
 
+test("keeps adjacent Markdown images separate with their own labels", () => {
+  const refs = extractMediaReferences(
+    "![A](https://example.com/a.png)![B](https://example.com/b.png)",
+  );
+
+  expect(
+    refs.map(({ url, displayName, mediaType }) => ({
+      url,
+      displayName,
+      mediaType,
+    })),
+  ).toEqual([
+    { url: "https://example.com/a.png", displayName: "A", mediaType: "image" },
+    { url: "https://example.com/b.png", displayName: "B", mediaType: "image" },
+  ]);
+});
+
+test("keeps extensionless adjacent images eligible for semantic indexing", () => {
+  const refs = extractMediaReferences(
+    "![First](https://example.com/first)![Second](https://example.com/second)",
+  );
+
+  expect(refs.map(({ url, mediaType }) => ({ url, mediaType }))).toEqual([
+    { url: "https://example.com/first", mediaType: "image" },
+    { url: "https://example.com/second", mediaType: "image" },
+  ]);
+  expect(refs[0].searchText).toContain("First");
+  expect(refs[1].searchText).toContain("Second");
+});
+
+test("separates adjacent file links, images and Roam media macros", () => {
+  const refs = extractMediaReferences(
+    "[Spec](https://example.com/spec.pdf)![Photo](https://example.com/photo.png){{video: https://example.com/stream}}{{audio: https://example.com/sound}}",
+  );
+
+  expect(refs.map(({ url, mediaType }) => ({ url, mediaType }))).toEqual([
+    { url: "https://example.com/spec.pdf", mediaType: "pdf" },
+    { url: "https://example.com/photo.png", mediaType: "image" },
+    { url: "https://example.com/stream", mediaType: "video" },
+    { url: "https://example.com/sound", mediaType: "audio" },
+  ]);
+});
+
+test("preserves plain URLs around recognized references and deduplicates repeats", () => {
+  const refs = extractMediaReferences(
+    "https://example.com/before.png![Photo](https://example.com/photo.png)https://example.com/after.png ![Again](https://example.com/photo.png)",
+  );
+
+  expect(refs.map(({ url }) => url)).toEqual([
+    "https://example.com/before.png",
+    "https://example.com/photo.png",
+    "https://example.com/after.png",
+  ]);
+  expect(refs[1].searchText).toContain("Photo");
+  expect(refs[1].searchText).toContain("Again");
+});
+
 test("uses explicit media markup when URLs have no file extension", () => {
   const refs = extractMediaReferences(
     "![RoamJS logo](https://avatars.githubusercontent.com/u/138642184) {{video: https://media.example.com/stream}}",

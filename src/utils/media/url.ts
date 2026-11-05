@@ -260,9 +260,15 @@ type MediaReferenceMetadata = {
   displayName?: string;
 };
 
-const getMediaReferenceMetadataByUrl = (
+const getMediaReferenceData = (
   blockString: string,
-): Map<string, MediaReferenceMetadata> => {
+): {
+  metadataByUrl: Map<string, MediaReferenceMetadata>;
+  matches: { url: string; index: number }[];
+  plainText: string;
+} => {
+  const matches: { url: string; index: number }[] = [];
+  const plainText = blockString.split("");
   const byUrl = new Map<
     string,
     { terms: Set<string>; mediaTypeHint?: MediaTypeHint; displayName?: string }
@@ -302,6 +308,8 @@ const getMediaReferenceMetadataByUrl = (
     match = MARKDOWN_MEDIA_REGEX.exec(blockString)
   ) {
     const [, imageMarker, label, url] = match;
+    matches.push({ url, index: match.index });
+    plainText.fill(" ", match.index, match.index + match[0].length);
     add({
       url,
       term: label || "",
@@ -317,6 +325,8 @@ const getMediaReferenceMetadataByUrl = (
     match = ROAM_MEDIA_MACRO_REGEX.exec(blockString)
   ) {
     const [, macroType, url] = match;
+    matches.push({ url, index: match.index });
+    plainText.fill(" ", match.index, match.index + match[0].length);
     add({
       url,
       term: macroType || "",
@@ -324,23 +334,40 @@ const getMediaReferenceMetadataByUrl = (
     });
   }
 
-  return new Map(
-    Array.from(byUrl.entries()).map(([url, metadata]) => [
-      url,
-      {
-        terms: Array.from(metadata.terms),
-        mediaTypeHint: metadata.mediaTypeHint,
-        displayName: metadata.displayName,
-      },
-    ]),
-  );
+  return {
+    metadataByUrl: new Map(
+      Array.from(byUrl.entries()).map(([url, metadata]) => [
+        url,
+        {
+          terms: Array.from(metadata.terms),
+          mediaTypeHint: metadata.mediaTypeHint,
+          displayName: metadata.displayName,
+        },
+      ]),
+    ),
+    matches,
+    plainText: plainText.join(""),
+  };
 };
 
 export const extractMediaReferences = (
   blockString: string,
 ): ParsedMediaReference[] => {
-  const matches = blockString.match(URL_REGEX) || [];
-  const metadataByUrl = getMediaReferenceMetadataByUrl(blockString);
+  const {
+    metadataByUrl,
+    matches: recognized,
+    plainText,
+  } = getMediaReferenceData(blockString);
+  URL_REGEX.lastIndex = 0;
+  const matches = [
+    ...recognized,
+    ...Array.from(plainText.matchAll(URL_REGEX), (match) => ({
+      url: match[0],
+      index: match.index ?? 0,
+    })),
+  ]
+    .sort((a, b) => a.index - b.index)
+    .map(({ url }) => url);
   const byUrl = matches.reduce<
     Map<
       string,
