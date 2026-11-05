@@ -6,7 +6,13 @@
 
 **Find the images, GIFs, videos, audio, PDFs, and files scattered across your graph, then search, filter, copy, upload, or manage them from one gallery.**
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/RoamJS/media-gallery)
+[![RoamJS](https://roamjs.com/badges/website.svg)](https://roamjs.com/) [![DeepWiki](https://roamjs.com/badges/deepwiki.svg)](https://deepwiki.com/RoamJS/media-gallery) [![Slack](https://roamjs.com/badges/slack.svg)](https://roamresearch.slack.com/archives/C016N2B66JU)
+
+## Video preview
+
+[![Watch the 35-second Media Gallery promo: a gallery of the car, sunflower, cat, and dog demo photographs](https://github.com/user-attachments/assets/b622037d-5af6-4c0c-92f2-6a6adf682ca8)](https://github.com/user-attachments/assets/a9a15866-0bc8-4982-999e-897ef3d5266f)
+
+[Watch the promo (35 seconds, silent)](https://github.com/user-attachments/assets/a9a15866-0bc8-4982-999e-897ef3d5266f). This stylized demonstration shows the **unreleased v0.1 candidate**; it is not a screen recording. Demo filenames and notes are fictional. [Photo credits and licences](docs/media/promo-photo-credits.md).
 
 ## Features
 
@@ -22,7 +28,7 @@
 - Open every referring block in the sidebar from a multi-reference preview count.
 - Copy Markdown references and Roam audio/video embeds from the preview.
 
-## How to use it
+## Usage
 
 1. Open the command palette and choose **Open Media Gallery**.
 2. Search immediately, or choose **Filters** for author, type, orientation, date, and sorting options. Active filters are counted on the button; **Reset** clears the search and filters.
@@ -30,7 +36,7 @@
 4. Choose **Source** to close the gallery and open the referencing block in Roam.
 5. Choose **Upload** or drag files anywhere in the dialog. The gallery remembers the focused block or open page when you open it, so changing focus while uploading does not change the destination. If no destination was available, references go to a **Media Gallery Uploads** page.
 
-The gallery uses a white dialog and compact Blueprint 3 controls that follow Roam's search interface. It reads media references from block text and combines duplicate URLs into one item. Created and updated details come from the blocks that reference each item. The earliest block creation and latest block edit are shown; neither establishes when the file was uploaded or when its URL was inserted. In a preview, click a count of multiple references to open those exact referring blocks in Roam’s right sidebar. **Copy Markdown** copies an image reference, Roam audio/video embed, or file link with the filename.
+The gallery reads media references from block text and combines duplicate URLs into one item. Created and updated details come from the blocks that reference each item. The earliest block creation and latest block edit are shown; neither establishes when the file was uploaded or when its URL was inserted. In a preview, click a count of multiple references to open those exact referring blocks in Roam’s right sidebar. **Copy Markdown** copies an image reference, Roam audio/video embed, or file link with the filename.
 
 **Block author** comes from Roam's creator and last-editor metadata on every block that references the media URL. Names are read from the linked Roam user/profile page, with a user-ID fallback when a name is unavailable. This describes who created or edited the Roam reference, not the photographer or original file creator. Photo credits stored in other blocks or inside the image are separate from this filter.
 
