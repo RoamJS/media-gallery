@@ -223,6 +223,49 @@ test("retains encoded parentheses and quoted-title URL fallback", () => {
   ]);
 });
 
+for (const title of [
+  '"Photo title"',
+  "'Photo title'",
+  "(Photo title)",
+  '"Photo \\"title\\""',
+]) {
+  test(`retains extensionless image hints and labels with Markdown title: ${title}`, () => {
+    const url = "https://example.com/render?id=1";
+    const refs = extractMediaReferences(`![Photo](${url} ${title})`);
+
+    expect(refs).toHaveLength(1);
+    expect(refs[0]).toMatchObject({
+      url,
+      mediaType: "image",
+      displayName: "Photo",
+      searchText: expect.stringContaining("Photo"),
+    });
+  });
+}
+
+test("retains titled Firebase image hints beside other titled references", () => {
+  const url =
+    "https://firebasestorage.googleapis.com/v0/b/graph/o/opaque?alt=media";
+  const refs = extractMediaReferences(
+    `![Uploaded photo](${url} "Uploaded title")![Other](https://example.com/render(2) 'Other title')`,
+  );
+
+  expect(
+    refs.map(({ url, mediaType, displayName }) => ({
+      url,
+      mediaType,
+      displayName,
+    })),
+  ).toEqual([
+    { url, mediaType: "image", displayName: "Uploaded photo" },
+    {
+      url: "https://example.com/render(2)",
+      mediaType: "image",
+      displayName: "Other",
+    },
+  ]);
+});
+
 test("uses explicit media markup when URLs have no file extension", () => {
   const refs = extractMediaReferences(
     "![RoamJS logo](https://avatars.githubusercontent.com/u/138642184) {{video: https://media.example.com/stream}}",

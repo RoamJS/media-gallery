@@ -58,6 +58,8 @@ const DOCUMENT_EXTENSIONS = new Set([
 
 const URL_REGEX = /https?:\/\/[^\s<>"']+/gi;
 const MARKDOWN_MEDIA_START_REGEX = /(!?)\[([^\]]*)\]\((https?:\/\/)/gi;
+const MARKDOWN_TITLE_END_REGEX =
+  /^\s+(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\((?:\\.|[^)\\])*\))?\s*\)/;
 const ROAM_MEDIA_MACRO_REGEX =
   /\{\{\s*(?:\[\[)?(video|audio)(?:\]\])?\s*:\s*(https?:\/\/[^}\s]+)\s*\}\}/gi;
 
@@ -268,24 +270,28 @@ type MediaReferenceMetadata = {
   displayName?: string;
 };
 
-const findMarkdownTargetEnd = ({
+const parseMarkdownTarget = ({
   text,
   start,
 }: {
   text: string;
   start: number;
-}): number | null => {
+}): { urlEnd: number; referenceEnd: number } | null => {
   let depth = 0;
   for (let index = start; index < text.length; index += 1) {
     const char = text[index];
     if (/\s/.test(char)) {
-      return null;
+      const ending =
+        depth === 0 && text.slice(index).match(MARKDOWN_TITLE_END_REGEX);
+      return ending
+        ? { urlEnd: index, referenceEnd: index + ending[0].length - 1 }
+        : null;
     }
     if (char === "(") {
       depth += 1;
     } else if (char === ")") {
       if (depth === 0) {
-        return index;
+        return { urlEnd: index, referenceEnd: index };
       }
       depth -= 1;
     }
@@ -342,14 +348,14 @@ const getMediaReferenceData = (
   ) {
     const [, imageMarker, label, protocol] = match;
     const start = match.index + match[0].length - protocol.length;
-    const end = findMarkdownTargetEnd({ text: blockString, start });
-    if (end === null) {
+    const target = parseMarkdownTarget({ text: blockString, start });
+    if (target === null) {
       continue;
     }
-    const url = blockString.slice(start, end);
-    MARKDOWN_MEDIA_START_REGEX.lastIndex = end + 1;
+    const url = blockString.slice(start, target.urlEnd);
+    MARKDOWN_MEDIA_START_REGEX.lastIndex = target.referenceEnd + 1;
     matches.push({ url, index: match.index });
-    plainText.fill(" ", match.index, end + 1);
+    plainText.fill(" ", match.index, target.referenceEnd + 1);
     add({
       url,
       term: label || "",
