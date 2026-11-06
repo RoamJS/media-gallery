@@ -657,6 +657,7 @@ const MediaGalleryOverlay = ({
         onUploadStateChange?.(false);
         if (mountedRef.current) {
           setUploading(false);
+          setFeedback((current) => (current?.pendingUpload ? null : current));
           setDragging(false);
         }
       }
@@ -741,6 +742,7 @@ const MediaGalleryOverlay = ({
             id: item.id,
             message:
               "Please wait for the uploads to finish before opening a source block.",
+            pendingUpload: true,
           });
           return;
         }
@@ -770,6 +772,7 @@ const MediaGalleryOverlay = ({
             id: item.id,
             message:
               "Please wait for the uploads to finish before opening referring blocks.",
+            pendingUpload: true,
           });
           return;
         }

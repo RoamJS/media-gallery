@@ -50,6 +50,7 @@ export type MediaFilters = {
 };
 
 export type MediaFeedback = {
+  pendingUpload?: boolean;
   id: string;
   message: string;
   url?: string;
