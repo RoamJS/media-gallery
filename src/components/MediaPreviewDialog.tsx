@@ -293,6 +293,7 @@ const MediaPreviewDialog = ({
           aria-label="Media actions"
         >
           <Popover
+            shouldReturnFocusOnClose
             isOpen={menuOpen}
             onInteraction={(open, event) => {
               if ((event as React.KeyboardEvent | undefined)?.key === "Escape")

@@ -199,6 +199,7 @@ const MediaCard = ({
             />
           ) : null}
           <Popover
+            shouldReturnFocusOnClose
             isOpen={menuOpen}
             onInteraction={(open, event) => {
               if ((event as React.KeyboardEvent | undefined)?.key === "Escape")
