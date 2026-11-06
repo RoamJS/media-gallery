@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import { Button, Spinner } from "@blueprintjs/core";
+import { canDismissUploads } from "~/utils/media/upload";
 import type { MediaUpload } from "~/types/upload";
 
 type Props = {
@@ -8,6 +9,7 @@ type Props = {
   destination: string;
   onRetry: () => void;
   onCopyUploadedUrl: (upload: MediaUpload) => void;
+  onDismiss: () => void;
 };
 const MediaUploadStatus = ({
   uploads,
@@ -15,7 +17,9 @@ const MediaUploadStatus = ({
   destination,
   onRetry,
   onCopyUploadedUrl,
+  onDismiss,
 }: Props): React.ReactElement | null => {
+  const [detailsOpen, setDetailsOpen] = useState(false);
   if (!uploads.length) return null;
   const added = uploads.filter((u) => u.status === "added").length;
   const failed = uploads.filter((u) => u.status === "failed").length;
@@ -32,24 +36,39 @@ const MediaUploadStatus = ({
           {busy ? <Spinner size={14} /> : null}
           {busy
             ? `${active?.status === "linking" ? "Adding reference" : "Uploading"}: ${active?.fileName || "updating results"}`
-            : "Upload finished"}{" "}
-          · {added} added{failed ? `, ${failed} failed` : ""}
+            : `${added} file${added === 1 ? "" : "s"} added`}
+          {busy ? ` · ${added} added` : ""}
+          {failed ? ` · ${failed} failed` : ""}
         </span>
-        {failed ? (
+        <div className="roamjs-media-gallery-upload-controls">
           <Button
-            text="Retry failed files"
-            icon="refresh"
-            disabled={busy}
-            onClick={onRetry}
+            minimal
+            text="Details"
+            aria-expanded={detailsOpen}
+            aria-controls="media-gallery-upload-details"
+            onClick={() => setDetailsOpen((open) => !open)}
           />
-        ) : null}
+          {failed ? (
+            <Button
+              text="Retry failed files"
+              icon="refresh"
+              disabled={busy}
+              onClick={onRetry}
+            />
+          ) : null}
+          {canDismissUploads({ uploads, busy }) ? (
+            <Button
+              minimal
+              icon="small-cross"
+              aria-label="Dismiss completed uploads"
+              onClick={onDismiss}
+            />
+          ) : null}
+        </div>
       </div>
-      <details>
-        <summary>
-          {uploads.length} file{uploads.length === 1 ? "" : "s"} · References in{" "}
-          {destination}
-        </summary>
+      <div id="media-gallery-upload-details" hidden={!detailsOpen}>
         <ul>
+          <li>Add to: {destination}</li>
           {uploads.map((upload) => (
             <li key={upload.id}>
               <div className="roamjs-media-gallery-upload-file">
@@ -84,7 +103,7 @@ const MediaUploadStatus = ({
             </li>
           ))}
         </ul>
-      </details>
+      </div>
       {busy ? (
         <p className="roamjs-media-gallery-hint">
           Keep the gallery open while these files are added.

@@ -1,5 +1,16 @@
 import type { MediaUpload } from "~/types/upload";
 
+export const canDismissUploads = ({
+  uploads,
+  busy,
+}: {
+  uploads: MediaUpload[];
+  busy: boolean;
+}): boolean =>
+  !busy &&
+  uploads.length > 0 &&
+  uploads.every((upload) => upload.status === "added");
+
 type UploadBatchOptions = {
   uploads: MediaUpload[];
   upload: (item: MediaUpload) => Promise<string>;

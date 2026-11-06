@@ -123,9 +123,8 @@ const SemanticPanel = ({
           <div className="roamjs-media-gallery-semantic-setup-copy">
             <h3>Search images by description</h3>
             <p>
-              Find images and GIFs with phrases like “sunset over water.” The
-              first build downloads about 90 MB. Images are processed in your
-              browser, and this graph's index stays in this browser profile.
+              One-time download: about 90 MB. Images are processed on this
+              device.
             </p>
           </div>
           <Button
@@ -151,7 +150,6 @@ const SemanticPanel = ({
               {summary.itemCount} image{summary.itemCount === 1 ? "" : "s"}{" "}
               ready
             </span>
-            {skippedCount > 0 ? <span>· {skippedCount} skipped</span> : null}
             {indexStale ? (
               <span className="roamjs-media-gallery-semantic-stale">
                 Update needed
@@ -245,8 +243,11 @@ const SemanticPanel = ({
               <dt>Index size</dt>
               <dd>{formatStorageSize(summary.byteLength)}</dd>
             </div>
-            {summary.model ? (
-              <>
+          </dl>
+          {summary.model ? (
+            <details>
+              <summary>Technical details</summary>
+              <dl className="roamjs-media-gallery-semantic-index-details">
                 <div>
                   <dt>Model</dt>
                   <dd>{summary.model.modelId}</dd>
@@ -255,9 +256,9 @@ const SemanticPanel = ({
                   <dt>Model revision</dt>
                   <dd>{summary.model.modelRevision}</dd>
                 </div>
-              </>
-            ) : null}
-          </dl>
+              </dl>
+            </details>
+          ) : null}
           {buildReport ? (
             <>
               <dl className="roamjs-media-gallery-semantic-report">

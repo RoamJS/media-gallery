@@ -5,6 +5,10 @@ import {
   Dialog,
   Icon,
   InputGroup,
+  Menu,
+  MenuItem,
+  Popover,
+  Position,
 } from "@blueprintjs/core";
 
 import {
@@ -196,43 +200,24 @@ const MediaPreviewDialog = ({
             ]
               .filter(Boolean)
               .join(" · ")}
-            {referenceCount ? " · " : null}
-            {referenceCount > 1 ? (
-              <button
-                type="button"
-                className="roamjs-media-gallery-reference-link"
-                title="Open referencing blocks in Roam’s right sidebar"
-                onClick={() => onOpenReferences(item)}
-              >
-                {referenceCount} referring blocks
-              </button>
-            ) : referenceCount === 1 ? (
-              "1 referring block"
-            ) : null}
           </p>
           <details className="roamjs-media-gallery-reference-details">
-            <summary>Reference details</summary>
-            <p>
-              Dates and contributors belong to the Roam blocks that refer to
-              this file. They do not establish upload time or file ownership.
-            </p>
+            <summary>
+              Used in {referenceCount} block{referenceCount === 1 ? "" : "s"}
+            </summary>
             <dl>
               <div>
-                <dt>Earliest referring block created</dt>
+                <dt>First block created</dt>
                 <dd>
                   {formatReferenceDate(first?.createdTime ?? null)}
-                  {first?.createdAuthor
-                    ? ` · Creator: ${first.createdAuthor}`
-                    : ""}
+                  {first?.createdAuthor ? ` · ${first.createdAuthor}` : ""}
                 </dd>
               </div>
               <div>
-                <dt>Latest referring block edited</dt>
+                <dt>Last block edited</dt>
                 <dd>
                   {formatReferenceDate(latest?.updatedTime ?? null)}
-                  {latest?.updatedAuthor
-                    ? ` · Editor: ${latest.updatedAuthor}`
-                    : ""}
+                  {latest?.updatedAuthor ? ` · ${latest.updatedAuthor}` : ""}
                 </dd>
               </div>
             </dl>
@@ -240,28 +225,32 @@ const MediaPreviewDialog = ({
               <>
                 <Button
                   minimal
-                  text={`Open ${references.length === 1 ? "referring block" : "all referring blocks"}`}
+                  text={
+                    references.length === 1 ? "Open block" : "Open all blocks"
+                  }
                   onClick={() => onOpenReferences(item)}
                 />
-                <ul>
-                  {references.slice(0, 20).map((reference, index) => (
-                    <li key={reference.blockUid}>
-                      <Button
-                        minimal
-                        text={`Open referring block ${index + 1}`}
-                        onClick={() =>
-                          onOpenSource({ ...item, references: [reference] })
-                        }
-                      />
-                      <span>
-                        Created {formatReferenceDate(reference.createdTime)} ·{" "}
-                        {reference.createdAuthor}; last edited{" "}
-                        {formatReferenceDate(reference.updatedTime)} ·{" "}
-                        {reference.updatedAuthor}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                {references.length > 1 ? (
+                  <ul>
+                    {references.slice(0, 20).map((reference, index) => (
+                      <li key={reference.blockUid}>
+                        <Button
+                          minimal
+                          text={`Block ${index + 1}`}
+                          onClick={() =>
+                            onOpenSource({ ...item, references: [reference] })
+                          }
+                        />
+                        <span>
+                          Created {formatReferenceDate(reference.createdTime)} ·{" "}
+                          {reference.createdAuthor}; last edited{" "}
+                          {formatReferenceDate(reference.updatedTime)} ·{" "}
+                          {reference.updatedAuthor}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
                 {references.length > 20 ? (
                   <p>
                     Showing the first 20 blocks. Open all referring blocks in
@@ -275,7 +264,14 @@ const MediaPreviewDialog = ({
           </details>
           {feedback ? (
             <div
-              className="roamjs-media-gallery-feedback"
+              className={[
+                "roamjs-media-gallery-feedback",
+                !feedback.error && !feedback.pendingUpload
+                  ? "roamjs-media-gallery-confirmation"
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
               role={feedback.error ? "alert" : "status"}
             >
               <span>{feedback.message}</span>
@@ -295,27 +291,34 @@ const MediaPreviewDialog = ({
           role="group"
           aria-label="Media actions"
         >
-          {item.references.length ? (
-            <Button
-              icon="document-open"
-              text="Source"
-              onClick={() => onOpenSource(item)}
-            />
-          ) : null}
-          <Button icon="link" text="Copy URL" onClick={() => onCopyUrl(item)} />
-          <Button
-            icon="clipboard"
-            text="Copy Markdown"
-            onClick={() => onCopyMarkdown(item)}
-          />
-          {canCopyMediaImage(item) && safeUrl ? (
-            <Button
-              icon="duplicate"
-              text="Copy image"
-              loading={copying}
-              onClick={() => onCopyFile(item)}
-            />
-          ) : null}
+          <Popover
+            usePortal={false}
+            position={Position.TOP_LEFT}
+            content={
+              <Menu aria-label="Copy formats">
+                <MenuItem
+                  icon="link"
+                  text="Copy link"
+                  onClick={() => onCopyUrl(item)}
+                />
+                <MenuItem
+                  icon="clipboard"
+                  text="Copy Markdown"
+                  onClick={() => onCopyMarkdown(item)}
+                />
+                {canCopyMediaImage(item) && safeUrl ? (
+                  <MenuItem
+                    icon="duplicate"
+                    text={copying ? "Copying…" : "Copy image"}
+                    disabled={copying}
+                    onClick={() => onCopyFile(item)}
+                  />
+                ) : null}
+              </Menu>
+            }
+          >
+            <Button icon="clipboard" text="Copy" rightIcon="caret-down" />
+          </Popover>
           <Button
             icon="download"
             text="Download"

@@ -1,7 +1,12 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Button,
-  ButtonGroup,
   Callout,
   Dialog,
   HTMLSelect,
@@ -23,7 +28,7 @@ import {
   getActiveConstraints,
   getDateRangeError,
 } from "~/utils/media/presentation";
-import { runUploadBatch } from "~/utils/media/upload";
+import { runUploadBatch, canDismissUploads } from "~/utils/media/upload";
 import type { MediaUpload, UploadDestination } from "~/types/upload";
 import type { MediaFeedback } from "~/types/media";
 import {
@@ -149,6 +154,14 @@ const MediaGalleryOverlay = ({
   const uploadsRef = useRef<MediaUpload[]>([]);
   const [uploads, setUploads] = useState<MediaUpload[]>([]);
   const [feedback, setFeedback] = useState<MediaFeedback | null>(null);
+  useEffect(() => {
+    if (!feedback || feedback.error || feedback.pendingUpload) return;
+    const timer = window.setTimeout(
+      () => setFeedback((current) => (current === feedback ? null : current)),
+      4000,
+    );
+    return () => window.clearTimeout(timer);
+  }, [feedback]);
   const inputRef = useRef<HTMLInputElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const navigatingRef = useRef(false);
@@ -709,25 +722,14 @@ const MediaGalleryOverlay = ({
     }): Promise<void> => {
       try {
         await copyTextToClipboard({ text: item.url });
-        setFeedback({ id: item.id, message: `URL copied · ${item.fileName}` });
-        renderToast({
-          id: `media-gallery-copy-url-${item.id}`,
-          content: "Copied URL.",
-          intent: "success",
-        });
+        setFeedback({ id: item.id, message: "Link copied" });
       } catch (e) {
-        const message = e instanceof Error ? e.message : "Failed to copy URL.";
         setFeedback({
           id: item.id,
           message:
             "The browser could not copy this URL. Select and copy it below.",
           url: item.url,
           error: true,
-        });
-        renderToast({
-          id: `media-gallery-copy-url-error-${item.id}`,
-          content: message,
-          intent: "danger",
         });
       }
     },
@@ -799,12 +801,7 @@ const MediaGalleryOverlay = ({
       await copyTextToClipboard({ text: formatUploadedMediaReference(item) });
       setFeedback({
         id: item.id,
-        message: `Markdown copied · ${item.fileName}`,
-      });
-      renderToast({
-        id: `media-gallery-markdown-${item.id}`,
-        content: "Copied Markdown.",
-        intent: "success",
+        message: "Markdown copied",
       });
     } catch (copyError) {
       setFeedback({
@@ -813,14 +810,6 @@ const MediaGalleryOverlay = ({
           "The browser could not copy the reference. Copy the URL below instead.",
         url: item.url,
         error: true,
-      });
-      renderToast({
-        id: `media-gallery-markdown-error-${item.id}`,
-        content:
-          copyError instanceof Error
-            ? copyError.message
-            : "Failed to copy Markdown.",
-        intent: "danger",
       });
     }
   }, []);
@@ -837,7 +826,12 @@ const MediaGalleryOverlay = ({
         const { file } = outcome;
         setFeedback({
           id: item.id,
-          message: `${outcome.status === "copied" ? "Image copied" : "Download started"} · ${item.fileName}`,
+          message:
+            outcome.status === "copied"
+              ? outcome.convertedToPng
+                ? "Image copied as PNG"
+                : "Image copied"
+              : "Image could not be copied. Download started instead.",
         });
         setItems((current) =>
           current.map((candidate) =>
@@ -846,32 +840,13 @@ const MediaGalleryOverlay = ({
               : candidate,
           ),
         );
-        renderToast({
-          id: `media-gallery-copy-file-${item.id}`,
-          content:
-            outcome.status === "copied"
-              ? outcome.convertedToPng
-                ? "Copied image as PNG."
-                : "Copied image."
-              : outcome.reason === "unsupported-format"
-                ? "Download started. This format cannot be copied as a file."
-                : "Download started because the browser could not copy this image.",
-          intent: "success",
-        });
       } catch (e) {
-        const message =
-          e instanceof Error ? e.message : "Failed to copy file to clipboard.";
         setFeedback({
           id: item.id,
           message:
             "Could not copy this image. Try Download or copy the URL below.",
           url: item.url,
           error: true,
-        });
-        renderToast({
-          id: `media-gallery-copy-file-error-${item.id}`,
-          content: message,
-          intent: "danger",
         });
       } finally {
         setCopyingById((current) => ({ ...current, [item.id]: false }));
@@ -887,7 +862,7 @@ const MediaGalleryOverlay = ({
       await downloadMediaFile({ file, fileName: item.fileName });
       setFeedback({
         id: item.id,
-        message: `Download started · ${item.fileName}`,
+        message: "Download started",
       });
       setItems((current) =>
         current.map((candidate) =>
@@ -903,14 +878,6 @@ const MediaGalleryOverlay = ({
           "Could not download this file. Copy its URL or open its source to check access.",
         url: item.url,
         error: true,
-      });
-      renderToast({
-        id: "media-gallery-feedback",
-        content:
-          downloadError instanceof Error
-            ? downloadError.message
-            : "Download failed.",
-        intent: "danger",
       });
     } finally {
       setDownloadingById((current) => ({ ...current, [item.id]: false }));
@@ -1038,31 +1005,20 @@ const MediaGalleryOverlay = ({
           onDrop={(event) => void onDropFiles(event)}
         >
           <div className="roamjs-media-gallery-toolbar">
-            <ButtonGroup
-              className="roamjs-media-gallery-modes"
-              aria-label="Gallery search mode"
-            >
-              <Button
-                minimal
-                text="Keyword"
-                active={mode === "keyword"}
-                aria-pressed={mode === "keyword"}
-                onClick={() => {
-                  if (semanticOperation && semanticOperation !== "clearing")
-                    cancelSemanticOperation();
-                  setMode("keyword");
-                }}
-              />
-              <Button
-                minimal
-                text="Semantic"
-                active={mode === "semantic"}
-                aria-pressed={mode === "semantic"}
-                onClick={() => {
-                  setMode("semantic");
-                }}
-              />
-            </ButtonGroup>
+            <HTMLSelect
+              className="roamjs-media-gallery-mode"
+              aria-label="Search mode"
+              value={mode}
+              onChange={(event) => {
+                if (semanticOperation && semanticOperation !== "clearing")
+                  cancelSemanticOperation();
+                setMode(event.target.value as MediaGalleryMode);
+              }}
+              options={[
+                { value: "keyword", label: "Keyword" },
+                { value: "semantic", label: "Semantic" },
+              ]}
+            />
             <InputGroup
               inputRef={searchRef}
               leftIcon="search"
@@ -1071,7 +1027,7 @@ const MediaGalleryOverlay = ({
               }
               placeholder={
                 mode === "keyword"
-                  ? "Search filenames, labels, URLs, or contributors"
+                  ? "Search media…"
                   : 'Describe an image, such as "sunset over water"'
               }
               value={mode === "keyword" ? filters.query : semanticQuery}
@@ -1093,7 +1049,6 @@ const MediaGalleryOverlay = ({
                 }
               }}
               rightElement={
-                narrow &&
                 (mode === "keyword" ? filters.query : semanticQuery) ? (
                   <Button
                     minimal
@@ -1117,7 +1072,8 @@ const MediaGalleryOverlay = ({
             {mode === "semantic" ? (
               <Button
                 minimal
-                text="Search"
+                text={narrow ? undefined : "Search"}
+                aria-label="Search images"
                 icon="arrow-right"
                 disabled={
                   !semanticQuery.trim() ||
@@ -1168,30 +1124,13 @@ const MediaGalleryOverlay = ({
                   onClick={() => setFilters(clearMediaConstraints)}
                 />
               ) : null}
-              {!narrow &&
-              (mode === "keyword" ? filters.query : semanticQuery) ? (
-                <Button
-                  minimal
-                  text="Clear search"
-                  onClick={() => {
-                    if (mode === "keyword") updateFilter("query", "");
-                    else {
-                      if (semanticOperation === "searching")
-                        cancelSemanticOperation();
-                      setSemanticQuery("");
-                      setSemanticResults([]);
-                      setSemanticSearchedQuery("");
-                    }
-                  }}
-                />
-              ) : null}
             </>
             <span
               className="roamjs-media-gallery-hint roamjs-media-gallery-destination"
               title={destination?.label}
             >
               {destination
-                ? `New references in ${destination.label}`
+                ? `Add to: ${destination.label}`
                 : destinationError
                   ? "Upload destination unavailable"
                   : "Finding upload destination…"}
@@ -1251,6 +1190,17 @@ const MediaGalleryOverlay = ({
             uploads={uploads}
             busy={uploading}
             destination={destination?.label || "original destination"}
+            onDismiss={() => {
+              if (
+                !canDismissUploads({
+                  uploads: uploadsRef.current,
+                  busy: uploadBusyRef.current,
+                })
+              )
+                return;
+              uploadsRef.current = [];
+              setUploads([]);
+            }}
             onRetry={() =>
               void runUploads(
                 uploadsRef.current.filter((item) => item.status === "failed"),
@@ -1268,7 +1218,14 @@ const MediaGalleryOverlay = ({
           />
           {feedback && !previewOpen ? (
             <div
-              className="roamjs-media-gallery-feedback"
+              className={[
+                "roamjs-media-gallery-feedback",
+                !feedback.error && !feedback.pendingUpload
+                  ? "roamjs-media-gallery-confirmation"
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
               role={feedback.error ? "alert" : "status"}
             >
               <span>{feedback.message}</span>
@@ -1282,7 +1239,7 @@ const MediaGalleryOverlay = ({
               ) : null}
             </div>
           ) : null}
-          {lastLoaded !== null && (loading || error) ? (
+          {lastLoaded !== null && error ? (
             <Callout
               intent={error ? "warning" : "none"}
               title={
@@ -1315,12 +1272,16 @@ const MediaGalleryOverlay = ({
           >
             <span className="roamjs-media-gallery-count">
               {mode === "keyword"
-                ? `${galleryResults.length} of ${items.length} files`
+                ? lastLoaded === null
+                  ? ""
+                  : loading
+                    ? "Refreshing…"
+                    : `${galleryResults.length} of ${items.length} files`
                 : semanticSearchedQuery
                   ? semanticLimitReached
                     ? `Top ${SEMANTIC_SEARCH_LIMIT} of ${filteredSemanticResults.length} indexed images for “${semanticSearchedQuery}”`
                     : `${galleryResults.length} ranked image${galleryResults.length === 1 ? "" : "s"} for “${semanticSearchedQuery}”`
-                  : "Search images by description"}
+                  : ""}
             </span>
             {mode === "semantic" && semanticSearchedQuery ? (
               <span className="roamjs-media-gallery-hint">
@@ -1340,10 +1301,9 @@ const MediaGalleryOverlay = ({
                 retry.
               </span>
             ) : null}
-            {mode === "keyword" ? (
+            {mode === "keyword" && lastLoaded !== null && items.length > 0 ? (
               <div className="roamjs-media-gallery-sort">
                 <label>
-                  Sort
                   <HTMLSelect
                     aria-label="Sort media"
                     value={`${filters.sortBy}-${filters.sortDirection}`}
@@ -1363,19 +1323,19 @@ const MediaGalleryOverlay = ({
                     options={[
                       {
                         value: "updated-desc",
-                        label: "Latest block edit first",
+                        label: "Block edited: newest",
                       },
                       {
                         value: "updated-asc",
-                        label: "Oldest block edit first",
+                        label: "Block edited: oldest",
                       },
                       {
                         value: "created-desc",
-                        label: "Newest block creation first",
+                        label: "Block created: newest",
                       },
                       {
                         value: "created-asc",
-                        label: "Earliest block creation first",
+                        label: "Block created: oldest",
                       },
                     ]}
                   />
@@ -1390,19 +1350,7 @@ const MediaGalleryOverlay = ({
             {loading && lastLoaded === null ? (
               <div className="roamjs-media-gallery-loading" role="status">
                 <Spinner size={24} />
-                <span>Finding media references…</span>
-                <span className="roamjs-media-gallery-hint">
-                  Large graphs may take a little longer. You can close this
-                  gallery.
-                </span>
-                <div
-                  className="roamjs-media-gallery-skeletons"
-                  aria-hidden="true"
-                >
-                  {Array.from({ length: 6 }, (_, index) => (
-                    <div key={index} className="bp3-skeleton" />
-                  ))}
-                </div>
+                <span>Loading media…</span>
               </div>
             ) : error && lastLoaded === null ? (
               <div className="roamjs-media-gallery-empty">
@@ -1418,6 +1366,22 @@ const MediaGalleryOverlay = ({
                   {error}
                 </details>
               </div>
+            ) : mode === "semantic" && !semanticSummary?.exists ? (
+              <div className="roamjs-media-gallery-empty">
+                <SemanticPanel
+                  graphName={graphName}
+                  summary={semanticSummary}
+                  summaryLoading={semanticSummaryLoading}
+                  loading={loading}
+                  operation={semanticOperation}
+                  progress={semanticProgress}
+                  buildReport={semanticBuildReport}
+                  error={semanticError}
+                  onBuild={() => void onBuildSemanticIndex()}
+                  onCancel={cancelSemanticOperation}
+                  onClear={() => void onClearSemanticIndex()}
+                />
+              </div>
             ) : galleryResults.length ? (
               <ul
                 className="roamjs-media-gallery-grid"
@@ -1427,9 +1391,6 @@ const MediaGalleryOverlay = ({
                   <li key={item.id}>
                     <MediaCard
                       item={item}
-                      feedback={
-                        feedback?.id === item.id ? feedback.message : undefined
-                      }
                       similarityScore={semanticResult?.score}
                       copying={copyingById[item.id]}
                       downloading={downloadingById[item.id]}
@@ -1465,7 +1426,7 @@ const MediaGalleryOverlay = ({
                           ? filters.query
                             ? `No matches for “${filters.query}”`
                             : "No media matches these filters"
-                          : "No media references yet"}
+                          : "No media yet"}
                     </h3>
                     <p>
                       {mode === "semantic"
@@ -1477,8 +1438,8 @@ const MediaGalleryOverlay = ({
                             ? "Describe an image above to search this graph's index."
                             : "Build an image index to get started."
                         : items.length
-                          ? "Try a different search or remove a filter. Your media is still in the graph."
-                          : "This gallery shows files linked in your Roam blocks. Upload a file here or link one in your graph, then refresh."}
+                          ? "Try another search or clear filters."
+                          : "Upload a file to add it to this page."}
                     </p>
                     <div className="roamjs-media-gallery-empty-actions">
                       {mode === "keyword" && filters.query ? (
@@ -1501,10 +1462,6 @@ const MediaGalleryOverlay = ({
                             disabled={!destination || uploading}
                             onClick={() => inputRef.current?.click()}
                           />
-                          <Button
-                            text="Refresh"
-                            onClick={() => void refreshItems()}
-                          />
                         </>
                       ) : null}
                     </div>
@@ -1518,7 +1475,7 @@ const MediaGalleryOverlay = ({
               </p>
             ) : null}
           </div>
-          {mode === "semantic" ? (
+          {mode === "semantic" && semanticSummary?.exists ? (
             <SemanticPanel
               graphName={graphName}
               summary={semanticSummary}
@@ -1558,7 +1515,7 @@ const MediaGalleryOverlay = ({
                 </strong>
                 <p>
                   {destination
-                    ? `New references in ${destination.label}`
+                    ? `Add to: ${destination.label}`
                     : "Reopen the gallery from the page or block where you want references added."}
                 </p>
               </div>

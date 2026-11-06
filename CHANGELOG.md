@@ -11,13 +11,19 @@
 - File upload through the picker or drag and drop.
 - URL and image clipboard actions with original-file download fallback.
 - Source navigation for every referenced media card.
-- Clickable multi-reference preview counts that open the actual referring blocks in Roam’s sidebar.
+- Per-block and Open all actions in preview details that open the actual referring blocks in Roam’s sidebar.
 - Copy Markdown actions for image references, audio/video embeds, and file links.
 - Semantic similarity percentages with an explicit 24-result display limit.
 - Larger image, GIF, video, and audio previews, with original-file links for documents and unavailable previews.
 - Semantic build and search cancellation, with index metadata and skipped-image reports under **Details**.
 
 ### Changed
+
+- Simplify cards to Source and More, group preview copy formats, and remove duplicate reference details.
+- Show one temporary copy/download confirmation without shifting results; keep actionable failures together.
+- Make successful upload summaries dismissible while retaining failed-file retries.
+- Collapse reference date filters, shorten sorting labels, and compact mobile controls without reducing touch targets.
+- Bring semantic setup and its action together; hide unknown counts and unnecessary empty-state controls.
 
 - Put search first, keep sorting visible, and show removable filter chips with separate search/filter clearing.
 - Show the captured reference destination before uploads and drops, plus per-file progress, partial results, and retries that reuse uploaded files.

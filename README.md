@@ -31,10 +31,10 @@
 ## Usage
 
 1. Open the command palette and choose **Open Media Gallery**.
-2. Search immediately, use the visible **Sort** control, or choose **Filters** for block contributor, media type, orientation, and reference-block dates. Active filters stay visible as removable chips. **Clear search** changes only your query; **Clear filters** keeps the query and sort order. Reversed date ranges show an explanation beside the fields.
-3. Select a thumbnail to open a larger preview. Labeled **Source**, **Copy URL**, **Copy image** (for supported images), and **Download** actions remain visible below each card. Documents and unavailable previews offer **Open original** in the preview dialog. **Retry preview** retries a failed image, audio, or video preview without changing its reference.
+2. Search immediately, use the sort menu, or choose **Filters** for block contributor, media type, orientation, and reference-block dates. Active filters stay visible as removable chips. **Clear search** changes only your query; **Clear filters** keeps the query and sort order. Expand **Date range** for creation/edit ranges. Active dates reopen automatically; reversed ranges show an explanation beside the fields.
+3. Select a thumbnail to open a larger preview. Each card has **Source** and **More**. Open **More** for **Copy link**, **Copy image** (supported images), and **Download**. Documents and unavailable previews offer **Open original** in the preview dialog. **Retry preview** retries a failed image, audio, or video preview without changing its reference.
 4. Choose **Source** to close the gallery and open the referencing block in Roam.
-5. Check **New references in…**, then choose **Upload files** or drag files into the dialog. The gallery remembers the focused block or open page when you open it, so changing focus while uploading does not change the destination. If no destination was available, references go to a **Media Gallery Uploads** page. Keep the gallery open while uploading. Expand the upload status to see each file; **Retry failed files** retries failures and reuses an already uploaded file when only reference creation failed.
+5. Check **Add to…**, then choose **Upload files** or drag files into the dialog. The gallery remembers the focused block or open page when you open it, so changing focus while uploading does not change the destination. If no destination was available, references go to a **Media Gallery Uploads** page. Keep the gallery open while uploading. Successful uploads collapse into a dismissible summary. Expand **Details** to see each file; **Retry failed files** retries failures and reuses an already uploaded file when only reference creation failed.
 
 ### Loading and recovery
 
@@ -46,9 +46,9 @@ On narrow screens, **Filters** opens a separate keyboard-accessible dialog, leav
 
 The gallery reads media references from block text and combines duplicate URLs into one item.
 
-Open **Reference details** in a preview to see the earliest referring-block creation and its creator, plus the latest referring-block edit and its editor. These are separate events; neither establishes when the file was uploaded or when its URL was inserted. Cards show distinct referring-block counts without implying that one contributor owns the file. In a preview, click a count of multiple references to open those exact referring blocks in Roam’s right sidebar. **Copy Markdown** copies an image reference, Roam audio/video embed, or file link with the filename.
+Open **Used in … blocks** in a preview to see the earliest referring-block creation and its creator, plus the latest referring-block edit and its editor. These are separate events; neither establishes when the file was uploaded or when its URL was inserted. A single reference shows one set of dates and one **Open block** action. Multiple references offer per-block navigation and **Open all blocks**. The preview’s **Copy** menu includes **Copy Markdown**, which copies an image reference, Roam audio/video embed, or file link with the filename.
 
-**Block contributor** comes from Roam's creator and last-editor metadata on every block that references the media URL. Names are read from the linked Roam user/profile page, with a user-ID fallback when a name is unavailable. This describes who created or edited the Roam reference, not the photographer or original file creator. Photo credits stored in other blocks or inside the image are separate from this filter.
+**Contributor** comes from Roam's creator and last-editor metadata on every block that references the media URL. Names are read from the linked Roam user/profile page, with a user-ID fallback when a name is unavailable. This describes who created or edited the Roam reference, not the photographer or original file creator. Photo credits stored in other blocks or inside the image are separate from this filter.
 
 ### Orientation filters
 

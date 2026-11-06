@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { HTMLSelect } from "@blueprintjs/core";
 import type { MediaFilters } from "~/types/media";
 import { getDateRangeError } from "~/utils/media/presentation";
@@ -19,11 +19,21 @@ const MediaFilterFields = ({
   updateFilter,
 }: Props): React.ReactElement => {
   const error = getDateRangeError(filters);
+  const hasDates = Boolean(
+    filters.createdFrom ||
+    filters.createdTo ||
+    filters.updatedFrom ||
+    filters.updatedTo,
+  );
+  const [datesOpen, setDatesOpen] = useState(hasDates);
+  useEffect(() => {
+    if (hasDates || error) setDatesOpen(true);
+  }, [hasDates, error]);
   return (
     <>
       <div className="roamjs-media-gallery-filter-grid">
         <label>
-          Block contributor
+          Contributor
           <HTMLSelect
             aria-label="Block contributor"
             value={filters.author}
@@ -40,7 +50,7 @@ const MediaFilterFields = ({
           </HTMLSelect>
         </label>
         <label>
-          Media type
+          Type
           <HTMLSelect
             aria-label="Media type"
             value={filters.mediaType}
@@ -64,7 +74,7 @@ const MediaFilterFields = ({
           </HTMLSelect>
         </label>
         <label>
-          Image orientation
+          Orientation
           <HTMLSelect
             aria-label="Image orientation"
             value={filters.orientation}
@@ -84,59 +94,85 @@ const MediaFilterFields = ({
           </HTMLSelect>
         </label>
       </div>
-      <div className="roamjs-media-gallery-date-grid">
+      <details className="roamjs-media-gallery-date-section" open={datesOpen}>
+        <summary
+          onClick={(event) => {
+            event.preventDefault();
+            setDatesOpen((open) => !open);
+          }}
+        >
+          Date range{hasDates ? " · Active" : ""}
+        </summary>
+        <p className="roamjs-media-gallery-filter-note">
+          Dates refer to Roam blocks.
+        </p>
         {(
           [
-            ["createdFrom", "Earliest block created from"],
-            ["createdTo", "Earliest block created to"],
-            ["updatedFrom", "Latest block edited from"],
-            ["updatedTo", "Latest block edited to"],
+            ["created", "First block created"],
+            ["updated", "Last block edited"],
           ] as const
-        ).map(([key, label]) => (
-          <label key={key}>
-            {label}
-            <input
-              type="date"
-              aria-label={label}
-              className="bp3-input"
-              value={filters[key]}
-              aria-invalid={Boolean(error)}
-              aria-describedby={error ? "media-gallery-date-error" : undefined}
-              min={
-                key === "createdTo"
-                  ? filters.createdFrom
-                  : key === "updatedTo"
-                    ? filters.updatedFrom
-                    : undefined
-              }
-              max={
-                key === "createdFrom"
-                  ? filters.createdTo
-                  : key === "updatedFrom"
-                    ? filters.updatedTo
-                    : undefined
-              }
-              onChange={(event) => updateFilter(key, event.target.value)}
-            />
-          </label>
+        ).map(([kind, heading]) => (
+          <fieldset key={kind} className="roamjs-media-gallery-date-group">
+            <legend>{heading}</legend>
+            <div className="roamjs-media-gallery-date-grid">
+              {(["From", "To"] as const).map((bound) => {
+                const key = `${kind}${bound}` as
+                  | "createdFrom"
+                  | "createdTo"
+                  | "updatedFrom"
+                  | "updatedTo";
+                const label = `${heading} ${bound.toLowerCase()}`;
+                return (
+                  <label key={key}>
+                    {bound}
+                    <input
+                      type="date"
+                      aria-label={label}
+                      className="bp3-input"
+                      value={filters[key]}
+                      aria-invalid={Boolean(error)}
+                      aria-describedby={
+                        error ? "media-gallery-date-error" : undefined
+                      }
+                      min={
+                        key === "createdTo"
+                          ? filters.createdFrom
+                          : key === "updatedTo"
+                            ? filters.updatedFrom
+                            : undefined
+                      }
+                      max={
+                        key === "createdFrom"
+                          ? filters.createdTo
+                          : key === "updatedFrom"
+                            ? filters.updatedTo
+                            : undefined
+                      }
+                      onChange={(event) =>
+                        updateFilter(key, event.target.value)
+                      }
+                    />
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
         ))}
-      </div>
-      {error ? (
-        <p
-          id="media-gallery-date-error"
-          className="roamjs-media-gallery-inline-error"
-          role="alert"
-        >
-          {error}
+        {error ? (
+          <p
+            id="media-gallery-date-error"
+            className="roamjs-media-gallery-inline-error"
+            role="alert"
+          >
+            {error}
+          </p>
+        ) : null}
+      </details>
+      {semantic ? (
+        <p className="roamjs-media-gallery-filter-note">
+          Results stay ordered by similarity.
         </p>
       ) : null}
-      <p className="roamjs-media-gallery-filter-note">
-        Dates and contributors describe referring Roam blocks, not file uploads
-        or ownership.
-        {semantic
-          ? " Filters apply to all indexed images; results stay ordered by similarity."
-          : ""}
-      </p>
     </>
   );
 };
