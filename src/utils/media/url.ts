@@ -57,7 +57,7 @@ const DOCUMENT_EXTENSIONS = new Set([
 ]);
 
 const URL_REGEX = /https?:\/\/[^\s<>"']+/gi;
-const MARKDOWN_MEDIA_START_REGEX = /(!?)\[([^\]]*)\]\((https?:\/\/)/gi;
+const MARKDOWN_MEDIA_START_REGEX = /(!?)\[([^\[\]]*)\]\((https?:\/\/)/gi;
 const MARKDOWN_TITLE_END_REGEX =
   /^\s+(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\((?:\\.|[^)\\])*\))?\s*\)/;
 const ROAM_MEDIA_MACRO_REGEX =

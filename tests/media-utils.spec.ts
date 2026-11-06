@@ -283,6 +283,71 @@ test("uses explicit media markup when URLs have no file extension", () => {
   });
 });
 
+for (const url of [
+  "https://example.com/render?id=1",
+  "https://firebasestorage.googleapis.com/v0/b/graph/o/opaque?alt=media",
+  "https://example.com/photo.png",
+]) {
+  test(`preserves an image wrapped in a Markdown link: ${url}`, () => {
+    const refs = extractMediaReferences(
+      `[![Photo](${url})](https://example.com/page)`,
+    );
+
+    expect(refs).toHaveLength(1);
+    expect(refs[0]).toMatchObject({
+      url,
+      mediaType: "image",
+      displayName: "Photo",
+      searchText: expect.stringContaining("Photo"),
+    });
+    expect(refs[0].displayName).not.toContain("![");
+  });
+}
+
+test("keeps adjacent linked images and titled targets separate", () => {
+  const refs = extractMediaReferences(
+    '[![First](https://example.com/render(1) "First title")](https://example.com/page)![Second](https://example.com/render(2))[Spec](https://example.com/spec.pdf)',
+  );
+
+  expect(
+    refs.map(({ url, mediaType, displayName }) => ({
+      url,
+      mediaType,
+      displayName,
+    })),
+  ).toEqual([
+    {
+      url: "https://example.com/render(1)",
+      mediaType: "image",
+      displayName: "First",
+    },
+    {
+      url: "https://example.com/render(2)",
+      mediaType: "image",
+      displayName: "Second",
+    },
+    {
+      url: "https://example.com/spec.pdf",
+      mediaType: "pdf",
+      displayName: "Spec",
+    },
+  ]);
+});
+
+test("keeps the image hint when a linked image URL also appears plainly", () => {
+  const url = "https://example.com/render?id=1";
+  const refs = extractMediaReferences(
+    `${url} [![Photo](${url})](https://example.com/page)`,
+  );
+
+  expect(refs).toHaveLength(1);
+  expect(refs[0]).toMatchObject({
+    url,
+    mediaType: "image",
+    displayName: "Photo",
+  });
+});
+
 test("deduplicates an uploaded preview and preserves its filename link", () => {
   const url =
     "https://firebasestorage.googleapis.com/v0/b/graph/o/generated.png?alt=media";
