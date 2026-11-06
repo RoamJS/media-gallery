@@ -8,7 +8,7 @@
 
 [![RoamJS](https://roamjs.com/badges/website.svg)](https://roamjs.com/) [![DeepWiki](https://roamjs.com/badges/deepwiki.svg)](https://deepwiki.com/RoamJS/media-gallery) [![Slack](https://roamjs.com/badges/slack.svg)](https://roamresearch.slack.com/archives/C016N2B66JU)
 
-## Video preview
+## Promo video
 
 [![Watch the 35-second Media Gallery promo: a gallery of the car, sunflower, cat, and dog demo photographs](https://github.com/user-attachments/assets/b622037d-5af6-4c0c-92f2-6a6adf682ca8)](https://github.com/user-attachments/assets/a9a15866-0bc8-4982-999e-897ef3d5266f)
 

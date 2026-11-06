@@ -27,4 +27,5 @@ The dog photograph is © Jakub Hałun, licensed CC BY-SA 4.0. As scaled and crop
 - Demonstrated extension source: `ad433a5ce3b03cfcb4c26c4f9fc2730eb6326b73` (unreleased candidate).
 - Photo selections recorded November 4, 2026. The video includes a short on-screen credit; this page retains the full links and change notices.
 - The “red car” similarity scores come from a direct local MobileCLIP probe on these four files using the candidate's model configuration. They are not an authenticated Roam screen capture or match probabilities.
-- [Attachment provenance and review status](https://github.com/RoamJS/media-gallery/pull/1#issuecomment-6650329711). The video remains a review candidate; sharing this documentation does not mark it human accepted or release the extension.
+- Promo approval: Michael accepted this exact video as final on November 5, 2026. Approval applies to the promo only; the extension remains unreleased.
+- [Attachment provenance](https://github.com/RoamJS/media-gallery/pull/1#issuecomment-6650329711). Sharing the promo does not release the extension or submit it to Roam Depot.
