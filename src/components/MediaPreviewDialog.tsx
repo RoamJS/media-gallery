@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { AnchorButton, Button, Dialog, Icon } from "@blueprintjs/core";
+import {
+  AnchorButton,
+  Button,
+  Dialog,
+  Icon,
+  InputGroup,
+} from "@blueprintjs/core";
 
 import {
   canCopyMediaImage,
@@ -12,13 +18,19 @@ import {
 import { getOriginalMediaSource } from "~/utils/media/source";
 import useMediaPreviewSource from "~/components/useMediaPreviewSource";
 
-import type { MediaItem } from "~/types/media";
+import {
+  getReferenceEvents,
+  formatReferenceDate,
+} from "~/utils/media/presentation";
+import type { MediaItem, MediaFeedback } from "~/types/media";
 
 export type MediaPreviewDialogProps = {
   item: MediaItem | null;
   isOpen: boolean;
   onClose: () => void;
   onClosed?: () => void;
+  dark?: boolean;
+  feedback?: MediaFeedback | null;
   copying?: boolean;
   downloading?: boolean;
   onOpenSource: MediaAction;
@@ -34,6 +46,8 @@ const MediaPreviewDialog = ({
   isOpen,
   onClose,
   onClosed,
+  dark = false,
+  feedback,
   copying = false,
   downloading = false,
   onOpenSource,
@@ -43,6 +57,7 @@ const MediaPreviewDialog = ({
   onCopyFile,
   onDownload,
 }: MediaPreviewDialogProps): React.ReactElement | null => {
+  const [previewRevision, setPreviewRevision] = useState(0);
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   useEffect(() => {
     if (isOpen) {
@@ -58,6 +73,7 @@ const MediaPreviewDialog = ({
     failed: sourceFailed,
   } = useMediaPreviewSource(
     isOpen && item && supportsPreview ? getSafeMediaUrl(item.url) : null,
+    previewRevision,
   );
   if (!item) {
     return null;
@@ -68,9 +84,12 @@ const MediaPreviewDialog = ({
   const isImage = item.mediaType === "image" || item.mediaType === "gif";
   const canPreview = supportsPreview;
   const size = formatMediaSize(item.sizeBytes);
-  const referenceCount = new Set(
-    item.references.map(({ blockUid }) => blockUid),
-  ).size;
+  const { first, latest, count: referenceCount } = getReferenceEvents(item);
+  const references = [
+    ...new Map(
+      item.references.map((reference) => [reference.blockUid, reference]),
+    ).values(),
+  ];
   const handleClose = (event?: React.SyntheticEvent<HTMLElement>): void => {
     event?.stopPropagation();
     onClose();
@@ -87,13 +106,16 @@ const MediaPreviewDialog = ({
       enforceFocus
       shouldReturnFocusOnClose
       canEscapeKeyClose
-      className="roamjs-media-gallery-preview-dialog"
+      className={["roamjs-media-gallery-preview-dialog", dark ? "bp3-dark" : ""]
+        .filter(Boolean)
+        .join(" ")}
     >
       <div className="bp3-dialog-body roamjs-media-gallery-preview-body">
         <div className="roamjs-media-gallery-preview-stage">
           {previewUrl && !previewFailed && isImage ? (
             <img
               className="roamjs-media-gallery-full-image"
+              key={previewRevision}
               src={previewUrl || undefined}
               alt={item.fileName}
               onError={() => setFailedUrl(item.url)}
@@ -101,6 +123,7 @@ const MediaPreviewDialog = ({
           ) : previewUrl && !previewFailed && item.mediaType === "video" ? (
             <video
               className="roamjs-media-gallery-full-video"
+              key={previewRevision}
               src={previewUrl || undefined}
               controls
               preload="metadata"
@@ -111,6 +134,7 @@ const MediaPreviewDialog = ({
             <div className="roamjs-media-gallery-audio-preview">
               <Icon icon="volume-up" iconSize={40} />
               <audio
+                key={previewRevision}
                 src={previewUrl || undefined}
                 controls
                 preload="metadata"
@@ -139,6 +163,16 @@ const MediaPreviewDialog = ({
                         ? "Open the original file or download it to view it in another app."
                         : "Open this file in a new tab or download the original."}
               </p>
+              {previewFailed && safeUrl && supportsPreview ? (
+                <Button
+                  text="Retry preview"
+                  icon="refresh"
+                  onClick={() => {
+                    setFailedUrl(null);
+                    setPreviewRevision((value) => value + 1);
+                  }}
+                />
+              ) : null}
               {originalUrl ? (
                 <AnchorButton
                   href={originalUrl || undefined}
@@ -170,17 +204,90 @@ const MediaPreviewDialog = ({
                 title="Open referencing blocks in Roam’s right sidebar"
                 onClick={() => onOpenReferences(item)}
               >
-                {referenceCount} references
+                {referenceCount} referring blocks
               </button>
             ) : referenceCount === 1 ? (
-              "1 reference"
+              "1 referring block"
             ) : null}
           </p>
-          {item.updatedTime ? (
-            <p className="roamjs-media-gallery-meta">
-              Reference block updated{" "}
-              {new Date(item.updatedTime).toLocaleString()}
+          <details className="roamjs-media-gallery-reference-details">
+            <summary>Reference details</summary>
+            <p>
+              Dates and contributors belong to the Roam blocks that refer to
+              this file. They do not establish upload time or file ownership.
             </p>
+            <dl>
+              <div>
+                <dt>Earliest referring block created</dt>
+                <dd>
+                  {formatReferenceDate(first?.createdTime ?? null)}
+                  {first?.createdAuthor
+                    ? ` · Creator: ${first.createdAuthor}`
+                    : ""}
+                </dd>
+              </div>
+              <div>
+                <dt>Latest referring block edited</dt>
+                <dd>
+                  {formatReferenceDate(latest?.updatedTime ?? null)}
+                  {latest?.updatedAuthor
+                    ? ` · Editor: ${latest.updatedAuthor}`
+                    : ""}
+                </dd>
+              </div>
+            </dl>
+            {references.length ? (
+              <>
+                <Button
+                  minimal
+                  text={`Open ${references.length === 1 ? "referring block" : "all referring blocks"}`}
+                  onClick={() => onOpenReferences(item)}
+                />
+                <ul>
+                  {references.slice(0, 20).map((reference, index) => (
+                    <li key={reference.blockUid}>
+                      <Button
+                        minimal
+                        text={`Open referring block ${index + 1}`}
+                        onClick={() =>
+                          onOpenSource({ ...item, references: [reference] })
+                        }
+                      />
+                      <span>
+                        Created {formatReferenceDate(reference.createdTime)} ·{" "}
+                        {reference.createdAuthor}; last edited{" "}
+                        {formatReferenceDate(reference.updatedTime)} ·{" "}
+                        {reference.updatedAuthor}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {references.length > 20 ? (
+                  <p>
+                    Showing the first 20 blocks. Open all referring blocks in
+                    the sidebar to see the full set.
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p>No referring blocks are available in this result.</p>
+            )}
+          </details>
+          {feedback ? (
+            <div
+              className="roamjs-media-gallery-feedback"
+              role={feedback.error ? "alert" : "status"}
+            >
+              <span>{feedback.message}</span>
+              {feedback.url ? (
+                <InputGroup
+                  aria-label="Media URL to copy manually"
+                  readOnly
+                  value={feedback.url}
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+              ) : null}
+            </div>
           ) : null}
         </div>
         <div

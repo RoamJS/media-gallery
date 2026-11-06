@@ -19,6 +19,12 @@
 
 ### Changed
 
+- Put search first, keep sorting visible, and show removable filter chips with separate search/filter clearing.
+- Show the captured reference destination before uploads and drops, plus per-file progress, partial results, and retries that reuse uploaded files.
+- Preserve results during refresh and give initial loading, empty graphs, no matches, and load failures their own guidance.
+- Add explicit reference-event details, labeled media actions, preview retries, and nearby copy/download feedback with a manual URL fallback.
+- Adapt filters to a focused dialog on narrow screens, enlarge touch controls, and follow Roam's light/dark appearance.
+
 - Refresh the gallery with a white dialog and compact Blueprint 3 controls inspired by Roam's advanced search.
 - Label the filter control **Filters**, show its active count, and provide reset controls.
 - Share author, media-type, orientation, and reference-block date filters between keyword and semantic search, applying them before the semantic result limit.

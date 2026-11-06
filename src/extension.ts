@@ -22,6 +22,7 @@ export default runExtension(async ({ extensionAPI }) => {
     );
   const semanticClient = createSemanticWorkerClient();
   let closeOverlay: (() => void) | undefined;
+  let uploadInProgress = false;
 
   const openMediaGallery = ({
     initialMode,
@@ -30,6 +31,15 @@ export default runExtension(async ({ extensionAPI }) => {
     initialMode: MediaGalleryMode;
     autoStartBuild?: boolean;
   }): void => {
+    if (uploadInProgress) {
+      renderToast({
+        id: "media-gallery-upload-busy",
+        content:
+          "Files are still being added in the open gallery. Please wait for them to finish.",
+        intent: "warning",
+      });
+      return;
+    }
     const uploadParentUid = captureUploadParentUid();
     closeOverlay?.();
     closeOverlay = renderMediaGallery({
@@ -37,6 +47,9 @@ export default runExtension(async ({ extensionAPI }) => {
       initialMode,
       autoStartBuild,
       uploadParentUid,
+      onUploadStateChange: (busy) => {
+        uploadInProgress = busy;
+      },
     });
   };
 

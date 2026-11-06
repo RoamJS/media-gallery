@@ -4,10 +4,16 @@ import {
   resolveMediaPreviewSource,
 } from "~/utils/media/source";
 
-type PreviewState = { original: string; url: string | null; failed: boolean };
+type PreviewState = {
+  revision: number;
+  original: string;
+  url: string | null;
+  failed: boolean;
+};
 
 const useMediaPreviewSource = (
   url: string | null,
+  revision = 0,
 ): { url: string | null; loading: boolean; failed: boolean } => {
   const [resolved, setResolved] = useState<PreviewState | null>(null);
   const needsDecryption = Boolean(url && isEncryptedRoamMedia(url));
@@ -25,18 +31,24 @@ const useMediaPreviewSource = (
           return;
         }
         release = source.release;
-        setResolved({ original: url, url: source.url, failed: false });
+        setResolved({
+          revision,
+          original: url,
+          url: source.url,
+          failed: false,
+        });
       })
       .catch(() => {
-        if (active) setResolved({ original: url, url: null, failed: true });
+        if (active)
+          setResolved({ revision, original: url, url: null, failed: true });
       });
     return () => {
       active = false;
       release?.();
     };
-  }, [url, needsDecryption]);
+  }, [url, needsDecryption, revision]);
   if (!needsDecryption) return { url, loading: false, failed: false };
-  if (resolved?.original !== url)
+  if (resolved?.original !== url || resolved.revision !== revision)
     return { url: null, loading: true, failed: false };
   return { url: resolved.url, loading: false, failed: resolved.failed };
 };

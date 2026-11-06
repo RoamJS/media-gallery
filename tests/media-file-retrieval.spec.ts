@@ -52,6 +52,7 @@ const setRoamUploadContext = ({
     createdPages: [],
   };
   let uidCount = 0;
+  const blockStrings = new Map<string, string>();
   Object.defineProperty(globalThis, "window", {
     configurable: true,
     writable: true,
@@ -79,10 +80,10 @@ const setRoamUploadContext = ({
         },
         data: {
           async: {
-            q: async (query: string): Promise<string | null> =>
+            q: async (query: string, uid: string): Promise<string | null> =>
               query.includes(":node/title")
                 ? context.uploadsPageUid
-                : "Uploaded reference",
+                : (blockStrings.get(uid) ?? null),
           },
         },
         createBlock: async ({
@@ -90,8 +91,9 @@ const setRoamUploadContext = ({
           block,
         }: {
           location: { "parent-uid": string };
-          block: { string: string };
+          block: { string: string; uid: string };
         }): Promise<void> => {
+          blockStrings.set(block.uid, block.string);
           context.createdBlocks.push({
             parentUid: location["parent-uid"],
             text: block.string,

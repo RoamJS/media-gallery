@@ -48,3 +48,10 @@ export type MediaFilters = {
   sortBy: "created" | "updated";
   sortDirection: "asc" | "desc";
 };
+
+export type MediaFeedback = {
+  id: string;
+  message: string;
+  url?: string;
+  error?: boolean;
+};

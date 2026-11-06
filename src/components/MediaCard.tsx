@@ -12,6 +12,7 @@ export type MediaAction = (item: MediaItem) => void;
 export type MediaCardProps = {
   item: MediaItem;
   copying?: boolean;
+  feedback?: string;
   downloading?: boolean;
   similarityScore?: number;
   onPreview: MediaAction;
@@ -62,18 +63,10 @@ export const getMediaTypeIcon = (item: MediaItem): IconName => {
   return item.mediaType === "video" ? "video" : "document";
 };
 
-const getReadableAuthor = (authors: string[]): string | undefined =>
-  authors.find(
-    (author) =>
-      Boolean(author.trim()) &&
-      author.toLowerCase() !== "unknown" &&
-      !/^[a-z0-9_-]{20,}$/i.test(author) &&
-      !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(author),
-  );
-
 const MediaCard = ({
   item,
   copying = false,
+  feedback,
   downloading = false,
   similarityScore,
   onPreview,
@@ -83,6 +76,7 @@ const MediaCard = ({
   onDownload,
   onImageLoad,
 }: MediaCardProps): React.ReactElement => {
+  const [previewRevision, setPreviewRevision] = useState(0);
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const safeUrl = getSafeMediaUrl(item.url);
   const isImage = item.mediaType === "image" || item.mediaType === "gif";
@@ -106,7 +100,10 @@ const MediaCard = ({
     url: previewUrl,
     loading: previewLoading,
     failed: sourceFailed,
-  } = useMediaPreviewSource(isImage && visible ? safeUrl : null);
+  } = useMediaPreviewSource(
+    isImage && visible ? safeUrl : null,
+    previewRevision,
+  );
   const previewFailed = failedUrl === item.url || !safeUrl || sourceFailed;
   const metadata = [
     getMediaTypeLabel(item),
@@ -115,7 +112,6 @@ const MediaCard = ({
   ]
     .filter(Boolean)
     .join(" · ");
-  const author = getReadableAuthor(item.authors);
   const referenceCount = new Set(
     item.references.map(({ blockUid }) => blockUid),
   ).size;
@@ -135,6 +131,7 @@ const MediaCard = ({
       >
         {isImage && !previewFailed && previewUrl ? (
           <img
+            key={previewRevision}
             src={previewUrl || undefined}
             alt=""
             className="roamjs-media-gallery-thumbnail-image"
@@ -174,23 +171,9 @@ const MediaCard = ({
           {item.fileName}
         </h3>
         <p className="roamjs-media-gallery-meta">{metadata}</p>
-        {referenceCount || author ? (
-          <p
-            className="roamjs-media-gallery-meta"
-            title={
-              author
-                ? `Roam block creator or last editor: ${author}`
-                : undefined
-            }
-          >
-            {[
-              referenceCount
-                ? `${referenceCount} reference${referenceCount === 1 ? "" : "s"}`
-                : null,
-              author,
-            ]
-              .filter(Boolean)
-              .join(" · ")}
+        {referenceCount ? (
+          <p className="roamjs-media-gallery-meta">
+            {referenceCount} referring block{referenceCount === 1 ? "" : "s"}
           </p>
         ) : null}
         <div
@@ -214,6 +197,7 @@ const MediaCard = ({
             icon="link"
             aria-label={`Copy URL for ${item.fileName}`}
             title="Copy URL"
+            text="Copy URL"
             onClick={() => onCopyUrl(item)}
           />
           {canCopyMediaImage(item) && safeUrl ? (
@@ -223,6 +207,7 @@ const MediaCard = ({
               icon="duplicate"
               aria-label={`Copy image ${item.fileName}`}
               title="Copy image"
+              text="Copy image"
               loading={copying}
               onClick={() => onCopyFile(item)}
             />
@@ -233,11 +218,28 @@ const MediaCard = ({
             icon="download"
             aria-label={`Download ${item.fileName}`}
             title="Download original file"
+            text="Download"
             loading={downloading}
             disabled={!safeUrl}
             onClick={() => onDownload(item)}
           />
+          {isImage && previewFailed && safeUrl ? (
+            <Button
+              small
+              minimal
+              icon="refresh"
+              text="Retry preview"
+              aria-label={`Retry preview for ${item.fileName}`}
+              onClick={() => {
+                setFailedUrl(null);
+                setPreviewRevision((value) => value + 1);
+              }}
+            />
+          ) : null}
         </div>
+        {feedback ? (
+          <p className="roamjs-media-gallery-card-feedback">{feedback}</p>
+        ) : null}
       </div>
     </article>
   );

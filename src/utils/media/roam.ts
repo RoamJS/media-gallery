@@ -547,51 +547,126 @@ const waitForBlockToBeQueryable = async ({
   }
 };
 
+export const resolveUploadDestination = async (
+  parentUid: string | null,
+): Promise<{ parentUid: string | null; label: string }> => {
+  if (!parentUid)
+    return { parentUid: null, label: "[[Media Gallery Uploads]]" };
+  const record = await window.roamAlphaAPI.data.async.pull(
+    "[:node/title :block/string {:block/page [:node/title]}]",
+    [":block/uid", parentUid],
+  );
+  const pageTitle = getValue<string>({
+    obj: record,
+    keys: [":node/title", "node/title", "title"],
+  });
+  if (pageTitle) return { parentUid, label: `[[${pageTitle}]]` };
+  const page = getValue({
+    obj: record,
+    keys: [":block/page", "block/page", "page"],
+  });
+  const title = getValue<string>({
+    obj: page,
+    keys: [":node/title", "node/title", "title"],
+  });
+  const text = getValue<string>({
+    obj: record,
+    keys: [":block/string", "block/string", "string"],
+  });
+  if (!text && !title)
+    throw new Error(
+      "The original upload destination is unavailable. Reopen the gallery from a page or block.",
+    );
+  return {
+    parentUid,
+    label: `${title ? `[[${title}]]` : "Original block"} › ${text?.replace(/https?:\/\/\S+/g, "[link]").slice(0, 70) || "focused block"}`,
+  };
+};
+
+export const uploadMediaFile = async ({
+  file,
+}: {
+  file: File;
+}): Promise<string> => {
+  const fileApi = getFileApi();
+  let result: string | null = null;
+  if (typeof fileApi.upload === "function")
+    result = await fileApi.upload({ file, toast: { hide: true } });
+  else if (typeof window.roamAlphaAPI.util.uploadFile === "function")
+    result = await window.roamAlphaAPI.util.uploadFile({ file });
+  const url = result ? extractUploadedFileUrl(result) : null;
+  if (!url)
+    throw new Error(
+      "Roam did not return a usable file URL. Check storage access before trying again.",
+    );
+  return url;
+};
+
+export const createUploadedMediaReference = async ({
+  url,
+  file,
+  fileName,
+  parentUid,
+  blockUid,
+}: {
+  url: string;
+  file: File;
+  fileName: string;
+  parentUid: string;
+  blockUid: string;
+}): Promise<void> => {
+  const mediaType = classifyMediaType({
+    extension: getExtension(fileName),
+    mimeType: file.type,
+  });
+  const text = formatUploadedMediaReference({
+    url,
+    fileName,
+    mediaType: mediaType === "other" ? undefined : mediaType,
+  });
+  const existing = (await window.roamAlphaAPI.data.async.q(
+    "[:find ?string . :in $ ?uid :where [?b :block/uid ?uid] [?b :block/string ?string]]",
+    blockUid,
+  )) as unknown;
+  if (typeof existing === "string") {
+    if (existing !== text)
+      throw new Error(
+        "The upload reference changed. Open its destination to review it before retrying.",
+      );
+    return;
+  }
+  await createBlock({
+    parentUid,
+    order: "last",
+    node: { uid: blockUid, text },
+  });
+  await waitForBlockToBeQueryable({ blockUid });
+};
+
+export const prepareUploadParent = async (
+  parentUid: string | null,
+): Promise<string> => getOrCreateUploadsParentUid({ parentUid });
+
 export const uploadFileAndCreateReference = async ({
   file,
-  fileName: requestedFileName,
-  parentUid: requestedParentUid,
+  fileName = file.name || "Uploaded media",
+  parentUid,
 }: {
   file: File;
   fileName?: string;
   parentUid?: string | null;
 }): Promise<string> => {
-  const capturedParentUid =
-    requestedParentUid === undefined
-      ? captureUploadParentUid()
-      : requestedParentUid;
-  const fileApi = getFileApi();
-  const fileName = requestedFileName || file.name || "Uploaded media";
-  let uploadResult: string | null = null;
-  if (typeof fileApi.upload === "function") {
-    uploadResult = await fileApi.upload({ file, toast: { hide: true } });
-  } else if (typeof window.roamAlphaAPI.util.uploadFile === "function") {
-    uploadResult = await window.roamAlphaAPI.util.uploadFile({ file });
-  }
-  const url = uploadResult ? extractUploadedFileUrl(uploadResult) : null;
-  if (!url) {
-    throw new Error("Roam did not return a usable URL for the uploaded file.");
-  }
-  const parentUid = await getOrCreateUploadsParentUid({
-    parentUid: capturedParentUid,
+  const destination = await prepareUploadParent(
+    parentUid === undefined ? captureUploadParentUid() : parentUid,
+  );
+  const url = await uploadMediaFile({ file });
+  await createUploadedMediaReference({
+    url,
+    file,
+    fileName,
+    parentUid: destination,
+    blockUid: window.roamAlphaAPI.util.generateUID(),
   });
-  const uploadedMediaType = classifyMediaType({
-    extension: getExtension(fileName),
-    mimeType: file.type,
-  });
-  const blockUid = await createBlock({
-    parentUid,
-    order: "last",
-    node: {
-      text: formatUploadedMediaReference({
-        url,
-        fileName,
-        mediaType:
-          uploadedMediaType === "other" ? undefined : uploadedMediaType,
-      }),
-    },
-  });
-  await waitForBlockToBeQueryable({ blockUid });
   return url;
 };
 

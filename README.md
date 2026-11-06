@@ -19,7 +19,7 @@
 - Browse media referenced anywhere in your graph in a responsive gallery.
 - Search by file name, URL, Markdown label, or Roam block author.
 - Build an optional local image index and search images and GIFs by visual meaning.
-- Filter by block author, media type, orientation, and reference-block created or updated date.
+- Filter by block contributor, media type, orientation, and reference-block created or updated date.
 - Sort keyword results by reference-block created or updated time in either direction.
 - Upload one or more files from the picker or by dragging them into the gallery.
 - Copy media URLs and supported images, with original-file downloads for other formats or blocked clipboard access.
@@ -31,18 +31,24 @@
 ## Usage
 
 1. Open the command palette and choose **Open Media Gallery**.
-2. Search immediately, or choose **Filters** for author, type, orientation, date, and sorting options. Active filters are counted on the button; **Reset** clears the search and filters.
-3. Select a thumbnail to open a larger preview. **Source**, **Copy URL**, **Copy image** (for supported images), and **Download** remain visible below each card. Documents and unavailable previews offer **Open original** in the preview dialog.
+2. Search immediately, use the visible **Sort** control, or choose **Filters** for block contributor, media type, orientation, and reference-block dates. Active filters stay visible as removable chips. **Clear search** changes only your query; **Clear filters** keeps the query and sort order. Reversed date ranges show an explanation beside the fields.
+3. Select a thumbnail to open a larger preview. Labeled **Source**, **Copy URL**, **Copy image** (for supported images), and **Download** actions remain visible below each card. Documents and unavailable previews offer **Open original** in the preview dialog. **Retry preview** retries a failed image, audio, or video preview without changing its reference.
 4. Choose **Source** to close the gallery and open the referencing block in Roam.
-5. Choose **Upload** or drag files anywhere in the dialog. The gallery remembers the focused block or open page when you open it, so changing focus while uploading does not change the destination. If no destination was available, references go to a **Media Gallery Uploads** page.
+5. Check **New references in…**, then choose **Upload files** or drag files into the dialog. The gallery remembers the focused block or open page when you open it, so changing focus while uploading does not change the destination. If no destination was available, references go to a **Media Gallery Uploads** page. Keep the gallery open while uploading. Expand the upload status to see each file; **Retry failed files** retries failures and reuses an already uploaded file when only reference creation failed.
+
+### Loading and recovery
+
+The first scan explains what is loading. Refresh keeps the previous results and scroll position visible; a failed refresh labels them as earlier results and offers **Try again**. An empty graph, a search with no matches, and a load failure have separate guidance. Copy/download feedback appears next to the gallery or preview; if the browser cannot copy a URL, a selectable field provides a manual fallback.
+
+On narrow screens, **Filters** opens a separate keyboard-accessible dialog, leaving the results area in place. The gallery and preview follow the host's light/dark appearance and use larger touch controls on narrow screens.
 
 ### Reference details
 
 The gallery reads media references from block text and combines duplicate URLs into one item.
 
-Created and updated details come from the blocks that reference each item. The earliest block creation and latest block edit are shown; neither establishes when the file was uploaded or when its URL was inserted. In a preview, click a count of multiple references to open those exact referring blocks in Roam’s right sidebar. **Copy Markdown** copies an image reference, Roam audio/video embed, or file link with the filename.
+Open **Reference details** in a preview to see the earliest referring-block creation and its creator, plus the latest referring-block edit and its editor. These are separate events; neither establishes when the file was uploaded or when its URL was inserted. Cards show distinct referring-block counts without implying that one contributor owns the file. In a preview, click a count of multiple references to open those exact referring blocks in Roam’s right sidebar. **Copy Markdown** copies an image reference, Roam audio/video embed, or file link with the filename.
 
-**Block author** comes from Roam's creator and last-editor metadata on every block that references the media URL. Names are read from the linked Roam user/profile page, with a user-ID fallback when a name is unavailable. This describes who created or edited the Roam reference, not the photographer or original file creator. Photo credits stored in other blocks or inside the image are separate from this filter.
+**Block contributor** comes from Roam's creator and last-editor metadata on every block that references the media URL. Names are read from the linked Roam user/profile page, with a user-ID fallback when a name is unavailable. This describes who created or edited the Roam reference, not the photographer or original file creator. Photo credits stored in other blocks or inside the image are separate from this filter.
 
 ### Orientation filters
 
@@ -59,7 +65,7 @@ Choosing an orientation checks image and GIF dimensions even when their thumbnai
 
 Semantic search ranks up to 24 images by visual similarity, closest first.
 
-**Filters** works in both modes: block author, media type, orientation, and reference-block dates apply to the full ranked image index before the 24-result display limit. Changing filters updates existing results immediately, preserving similarity order; keyword text and keyword date sorting do not affect semantic results.
+**Filters** works in both modes: block contributor, media type, orientation, and reference-block dates apply to the full ranked image index before the 24-result display limit. Changing filters updates existing results immediately, preserving similarity order; keyword text and keyword date sorting do not affect semantic results.
 
 Semantic search covers images and GIFs, so choosing another media type returns no results. When the limit is reached, the header shows **Top 24 of N indexed images** and the maximum is stated above and below the results.
 
