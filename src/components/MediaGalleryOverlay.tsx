@@ -1005,20 +1005,6 @@ const MediaGalleryOverlay = ({
           onDrop={(event) => void onDropFiles(event)}
         >
           <div className="roamjs-media-gallery-toolbar">
-            <HTMLSelect
-              className="roamjs-media-gallery-mode"
-              aria-label="Search mode"
-              value={mode}
-              onChange={(event) => {
-                if (semanticOperation && semanticOperation !== "clearing")
-                  cancelSemanticOperation();
-                setMode(event.target.value as MediaGalleryMode);
-              }}
-              options={[
-                { value: "keyword", label: "Keyword" },
-                { value: "semantic", label: "Semantic" },
-              ]}
-            />
             <InputGroup
               inputRef={searchRef}
               leftIcon="search"
@@ -1068,6 +1054,20 @@ const MediaGalleryOverlay = ({
                 ) : undefined
               }
               className="roamjs-media-gallery-search"
+            />
+            <HTMLSelect
+              className="roamjs-media-gallery-mode"
+              aria-label="Search mode"
+              value={mode}
+              onChange={(event) => {
+                if (semanticOperation && semanticOperation !== "clearing")
+                  cancelSemanticOperation();
+                setMode(event.target.value as MediaGalleryMode);
+              }}
+              options={[
+                { value: "keyword", label: "Keyword" },
+                { value: "semantic", label: "Semantic" },
+              ]}
             />
             {mode === "semantic" ? (
               <Button
