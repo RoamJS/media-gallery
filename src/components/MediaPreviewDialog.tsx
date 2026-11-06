@@ -61,6 +61,7 @@ const MediaPreviewDialog = ({
   onCopyFile,
   onDownload,
 }: MediaPreviewDialogProps): React.ReactElement | null => {
+  const [menuOpen, setMenuOpen] = useState(false);
   const [previewRevision, setPreviewRevision] = useState(0);
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -292,6 +293,12 @@ const MediaPreviewDialog = ({
           aria-label="Media actions"
         >
           <Popover
+            isOpen={menuOpen}
+            onInteraction={(open, event) => {
+              if ((event as React.KeyboardEvent | undefined)?.key === "Escape")
+                event?.stopPropagation();
+              setMenuOpen(open);
+            }}
             usePortal={false}
             position={Position.TOP_LEFT}
             content={

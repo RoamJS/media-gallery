@@ -82,6 +82,7 @@ const MediaCard = ({
   onDownload,
   onImageLoad,
 }: MediaCardProps): React.ReactElement => {
+  const [menuOpen, setMenuOpen] = useState(false);
   const [previewRevision, setPreviewRevision] = useState(0);
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const safeUrl = getSafeMediaUrl(item.url);
@@ -198,6 +199,12 @@ const MediaCard = ({
             />
           ) : null}
           <Popover
+            isOpen={menuOpen}
+            onInteraction={(open, event) => {
+              if ((event as React.KeyboardEvent | undefined)?.key === "Escape")
+                event?.stopPropagation();
+              setMenuOpen(open);
+            }}
             usePortal={false}
             position={Position.TOP_RIGHT}
             content={
