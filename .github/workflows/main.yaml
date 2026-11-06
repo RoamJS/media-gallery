@@ -1,27 +1,30 @@
-name: Publish Extension
+name: Validate Main
 on:
   workflow_dispatch:
   push:
-    branches: main
-    paths:
-      - "src/**"
-      - "README.md"
-      - "package.json"
-      - ".github/workflows/main.yaml"
+    branches: [main]
 
-env:
-  GITHUB_TOKEN: ${{ secrets.ROAMJS_RELEASE_TOKEN }}
-  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  AWS_REGION: ${{ vars.AWS_REGION }}
-  ROAMJS_PROXY: ${{ vars.ROAMJS_PROXY }}
+permissions:
+  contents: read
 
 jobs:
-  deploy:
+  validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v3
-      - name: install
-        run: npm install
-      - name: build
-        run: npx samepage build
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test
+        run: npm test
+      # The inherited non-dry build publishes and opens a Roam Depot PR on main.
+      - name: Build without publishing
+        run: npm run build:roam

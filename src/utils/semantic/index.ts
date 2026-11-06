@@ -1,0 +1,55 @@
+export {
+  SemanticModelMismatchError,
+  areSemanticModelsEqual,
+  buildSemanticIndex,
+  isSemanticIndexCompatible,
+  mapSemanticSearchMatches,
+  planSemanticIndexBuild,
+  searchSemanticIndex,
+  selectSemanticCandidates,
+} from "~/utils/semantic/core";
+export type {
+  SemanticBuildPlan,
+  SemanticBuildPlanItem,
+} from "~/utils/semantic/core";
+export {
+  SemanticIndexStorageError,
+  clearSemanticIndex,
+  getSemanticIndexSummary,
+  loadSemanticIndex,
+  requestPersistentStorage,
+  saveSemanticIndex,
+} from "~/utils/semantic/store";
+export {
+  SEMANTIC_EMBEDDING_DIMENSION,
+  SEMANTIC_EMBEDDING_DTYPE,
+  SEMANTIC_INDEX_SCHEMA_VERSION,
+  SEMANTIC_MODEL_ID,
+  SEMANTIC_MODEL_INFO,
+  SEMANTIC_MODEL_REVISION,
+  SEMANTIC_VISION_MODEL_DTYPE,
+  SEMANTIC_SEARCH_LIMIT,
+} from "~/types/semantic";
+export type {
+  SemanticBuildReport,
+  SemanticBuildSkip,
+  SemanticBuildSkipStage,
+  SemanticCandidate,
+  SemanticEmbedImagesResult,
+  SemanticEmbeddingCandidate,
+  SemanticFetchAndHashResult,
+  SemanticHashedCandidate,
+  SemanticImageEmbedding,
+  SemanticIndexEntry,
+  SemanticIndexRecord,
+  SemanticIndexSummary,
+  SemanticModelInfo,
+  SemanticProgress,
+  SemanticProgressCallback,
+  SemanticScoredRow,
+  SemanticSearchResult,
+  SemanticWorkerClient,
+  SemanticWorkerError,
+  SemanticWorkerRequest,
+  SemanticWorkerResponse,
+} from "~/types/semantic";
