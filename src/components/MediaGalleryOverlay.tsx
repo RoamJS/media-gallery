@@ -68,6 +68,11 @@ type MediaGalleryOverlayProps = MediaGalleryOverlayRenderProps & {
   onClose: () => void;
 };
 
+// Blueprint looks for [autofocus] before falling back to its header Close button.
+const setInitialSearchFocus = (input: HTMLInputElement | null): void => {
+  input?.setAttribute("autofocus", "");
+};
+
 const DEFAULT_FILTERS: MediaFilters = {
   query: "",
   author: "all",
@@ -146,7 +151,6 @@ const MediaGalleryOverlay = ({
   uploadParentUid,
 }: MediaGalleryOverlayProps): React.ReactElement => {
   const inputRef = useRef<HTMLInputElement>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
   const navigatingRef = useRef(false);
   const [dimensionCache] = useState(() => createMediaDimensionCache());
   const itemsRef = useRef<MediaItem[]>([]);
@@ -888,7 +892,6 @@ const MediaGalleryOverlay = ({
         enforceFocus={!previewOpen}
         canEscapeKeyClose={!previewOpen}
         shouldReturnFocusOnClose={!navigatingRef.current}
-        onOpened={() => searchRef.current?.focus()}
         className="roamjs-media-gallery-dialog"
       >
         <div
@@ -925,7 +928,7 @@ const MediaGalleryOverlay = ({
               />
             </ButtonGroup>
             <InputGroup
-              inputRef={searchRef}
+              inputRef={setInitialSearchFocus}
               leftIcon="search"
               aria-label={
                 mode === "keyword" ? "Search media" : "Describe an image"
