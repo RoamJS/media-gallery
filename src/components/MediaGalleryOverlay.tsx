@@ -11,6 +11,10 @@ import {
 import { render as renderToast } from "roamjs-components/components/Toast";
 
 import { downloadMediaFile } from "~/utils/media/clipboard";
+import {
+  UploadRecovery,
+  type UploadRecoveryQueue,
+} from "~/components/UploadRecovery";
 import MediaCard from "~/components/MediaCard";
 import MediaPreviewDialog from "~/components/MediaPreviewDialog";
 import SemanticPanel from "~/components/SemanticPanel";
@@ -40,6 +44,7 @@ import {
   openMediaItemSource,
   queryAllMediaItems,
   uploadFileAndCreateReference,
+  PendingUploadReference,
   withFileMetadata,
   withImageDimensions,
 } from "~/utils/media/roam";
@@ -57,6 +62,7 @@ import {
 export type MediaGalleryMode = "keyword" | "semantic";
 
 export type MediaGalleryOverlayRenderProps = {
+  recoveryQueue: UploadRecoveryQueue;
   semanticClient: SemanticWorkerClient;
   initialMode?: MediaGalleryMode;
   autoStartBuild?: boolean;
@@ -144,6 +150,7 @@ const isAbortError = (error: unknown): boolean =>
 
 const MediaGalleryOverlay = ({
   isOpen,
+  recoveryQueue,
   onClose,
   semanticClient,
   initialMode = "keyword",
@@ -588,19 +595,32 @@ const MediaGalleryOverlay = ({
       const uploadedUrls: string[] = [];
       try {
         for (const { file, fileName } of uploads) {
-          uploadedUrls.push(
-            await uploadFileAndCreateReference({
-              file,
-              fileName,
-              parentUid: uploadParentUid,
-            }),
-          );
+          try {
+            uploadedUrls.push(
+              await uploadFileAndCreateReference({
+                file,
+                fileName,
+                parentUid: uploadParentUid,
+              }),
+            );
+          } catch (error) {
+            if (!(error instanceof PendingUploadReference)) throw error;
+            recoveryQueue.add(error);
+            if (!mountedRef.current)
+              renderToast({
+                id: "media-gallery-pending-upload",
+                content:
+                  "File uploaded. Open Media Gallery to retry its reference.",
+                intent: "warning",
+              });
+          }
         }
-        renderToast({
-          id: "media-gallery-upload-success",
-          content: `Uploaded ${uploads.length} file${uploads.length === 1 ? "" : "s"}.`,
-          intent: "success",
-        });
+        if (uploadedUrls.length)
+          renderToast({
+            id: "media-gallery-upload-success",
+            content: `Added ${uploadedUrls.length} file reference(s).`,
+            intent: "success",
+          });
       } catch (e) {
         const message = e instanceof Error ? e.message : "Upload failed.";
         renderToast({
@@ -618,7 +638,7 @@ const MediaGalleryOverlay = ({
         setDragging(false);
       }
     },
-    [refreshItems, uploadParentUid],
+    [refreshItems, uploadParentUid, recoveryQueue],
   );
 
   const onFileInputChange = useCallback(
@@ -1022,6 +1042,13 @@ const MediaGalleryOverlay = ({
               onChange={(event) => void onFileInputChange(event)}
             />
           </div>
+          <UploadRecovery
+            queue={recoveryQueue}
+            onRecovered={(url) => {
+              setIndexStale(true);
+              void refreshItems({ expectedUrls: [url] });
+            }}
+          />
           {showFilters ? (
             <div
               id="media-gallery-filters"

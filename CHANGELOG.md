@@ -28,6 +28,9 @@
 
 ### Fixed
 
+- Recover an uploaded file when saving its block fails. Retry the reference or copy the file URL from the gallery.
+- Preserve punctuation in explicit media links and offer Copy image for supported uploads with extensionless storage URLs.
+
 - Opening Media Gallery with Enter in the command palette keeps the gallery open and focuses its search field.
 
 - Preserve uploaded image/audio/video references when Roam returns an extensionless storage URL.

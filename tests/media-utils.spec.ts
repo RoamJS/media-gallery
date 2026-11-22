@@ -1,3 +1,4 @@
+import { canCopyImage } from "../src/utils/media/clipboard";
 import { test, expect } from "@playwright/test";
 
 import type { MediaFilters, MediaItem } from "../src/types/media";
@@ -654,4 +655,57 @@ test("opens each distinct referring block in the native sidebar without changing
       value: originalWindow,
     });
   }
+});
+
+test("keeps explicit targets intact and trims prose punctuation only for bare URLs", () => {
+  const root = "https://example.test/photo.png?caption=Hello";
+  const bracket = "https://example.test/photo.png?rect=[0,0,100,100]";
+  const audio = "https://example.test/file.mp3?end=.";
+  expect(
+    extractMediaUrls(
+      `![a](${root}.) ![b](${bracket}) {{[[audio]]: ${audio}}} also ${root}.`,
+    ).map((x) => x.url),
+  ).toEqual([root + ".", bracket, audio, root]);
+});
+
+test("recovers an opaque image upload's format from its stored image reference", () => {
+  const url =
+    "https://firebasestorage.googleapis.com/v0/b/graph/o/opaque?alt=media";
+  for (const [ext, mime] of [
+    ["PNG", "image/png"],
+    ["jpg", "image/jpeg"],
+    ["bmp", "image/bmp"],
+    ["gif", "image/gif"],
+    ["webp", "image/webp"],
+  ]) {
+    const reference = formatUploadedMediaReference({
+      url,
+      fileName: "Photo." + ext,
+      mediaType: "image",
+    });
+    const parsed = extractMediaReferences(reference)[0];
+    expect(parsed.mimeType).toBe(mime);
+    expect(canCopyImage(parsed.mimeType)).toBe(
+      ["PNG", "jpg", "bmp"].includes(ext),
+    );
+  }
+  expect(extractMediaReferences(`[Photo.png](${url})`)[0].mimeType).toBe(
+    "application/octet-stream",
+  );
+});
+
+test("keeps the closing punctuation in a native PDF macro", () => {
+  const url = "https://example.test/paper.pdf?caption=Hello.";
+  expect(extractMediaUrls(`{{[[pdf]]: ${url}}}`)).toMatchObject([
+    { url, mediaType: "pdf" },
+  ]);
+});
+
+test("uses a filename even when an earlier image caption contains a dot", () => {
+  const url =
+    "https://firebasestorage.googleapis.com/v0/b/graph/o/opaque?alt=media";
+  expect(
+    extractMediaReferences(`![Fig. 1](${url}) ![Photo.png](${url})`)[0]
+      .mimeType,
+  ).toBe("image/png");
 });

@@ -360,7 +360,14 @@ export const queryAllMediaItems = async (): Promise<MediaItem[]> => {
         });
         return;
       }
-      if (existing.mediaType === "other" && parsed.mediaType !== "other") {
+      if (
+        (existing.mediaType === "other" && parsed.mediaType !== "other") ||
+        (existing.mediaType === "image" &&
+          existing.mimeType === "application/octet-stream" &&
+          (parsed.mediaType === "gif" || parsed.mediaType === "image") &&
+          parsed.mimeType !== "application/octet-stream")
+      ) {
+        existing.extension = parsed.extension;
         existing.mediaType = parsed.mediaType;
         existing.mimeType = parsed.mimeType;
       }
@@ -545,7 +552,58 @@ const waitForBlockToBeQueryable = async ({
     }
     await new Promise((resolve) => window.setTimeout(resolve, 100));
   }
+  throw new Error("Roam has not confirmed the reference yet.");
 };
+
+type UploadedReference = {
+  url: string;
+  fileName: string;
+  text: string;
+  blockUid: string;
+  parentUid: string | null;
+};
+
+const writeUploadedReference = async (
+  reference: UploadedReference,
+  parentUid: string | null,
+): Promise<void> => {
+  const destination = await getOrCreateUploadsParentUid({ parentUid });
+  await createBlock({
+    parentUid: destination,
+    order: "last",
+    node: { uid: reference.blockUid, text: reference.text },
+  });
+  await waitForBlockToBeQueryable({ blockUid: reference.blockUid });
+};
+
+export class PendingUploadReference extends Error {
+  constructor(readonly reference: UploadedReference) {
+    super("File uploaded, but its reference could not be confirmed.");
+  }
+
+  async retry(): Promise<void> {
+    const { blockUid, text, parentUid } = this.reference;
+    const existing: unknown = await window.roamAlphaAPI.data.async.q(
+      "[:find ?s . :in $ ?uid :where [?b :block/uid ?uid] [?b :block/string ?s]]",
+      blockUid,
+    );
+    if (existing === text) return;
+    if (typeof existing === "string")
+      throw new Error(
+        "This reference was edited. Copy the file URL to keep that edit.",
+      );
+    const parentExists =
+      parentUid &&
+      (await window.roamAlphaAPI.data.async.q(
+        "[:find ?e . :in $ ?uid :where [?e :block/uid ?uid]]",
+        parentUid,
+      ));
+    await writeUploadedReference(
+      this.reference,
+      parentExists ? parentUid : null,
+    );
+  }
+}
 
 export const uploadFileAndCreateReference = async ({
   file,
@@ -572,26 +630,26 @@ export const uploadFileAndCreateReference = async ({
   if (!url) {
     throw new Error("Roam did not return a usable URL for the uploaded file.");
   }
-  const parentUid = await getOrCreateUploadsParentUid({
-    parentUid: capturedParentUid,
-  });
-  const uploadedMediaType = classifyMediaType({
+  const mediaType = classifyMediaType({
     extension: getExtension(fileName),
     mimeType: file.type,
   });
-  const blockUid = await createBlock({
-    parentUid,
-    order: "last",
-    node: {
-      text: formatUploadedMediaReference({
-        url,
-        fileName,
-        mediaType:
-          uploadedMediaType === "other" ? undefined : uploadedMediaType,
-      }),
-    },
-  });
-  await waitForBlockToBeQueryable({ blockUid });
+  const reference: UploadedReference = {
+    url,
+    fileName,
+    parentUid: capturedParentUid,
+    blockUid: window.roamAlphaAPI.util.generateUID(),
+    text: formatUploadedMediaReference({
+      url,
+      fileName,
+      mediaType: mediaType === "other" ? undefined : mediaType,
+    }),
+  };
+  try {
+    await writeUploadedReference(reference, capturedParentUid);
+  } catch {
+    throw new PendingUploadReference(reference);
+  }
   return url;
 };
 
