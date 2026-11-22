@@ -28,6 +28,8 @@
 
 ### Fixed
 
+- Opening Media Gallery with Enter in the command palette keeps the gallery open and focuses its search field.
+
 - Preserve uploaded image/audio/video references when Roam returns an extensionless storage URL.
 
 - Keep encrypted originals in the download flow for safe opening outside Roam.
