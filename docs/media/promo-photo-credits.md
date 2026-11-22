@@ -1,6 +1,6 @@
 # Media Gallery promo photo credits
 
-These credits accompany the [35-second Media Gallery promo](https://github.com/user-attachments/assets/a9a15866-0bc8-4982-999e-897ef3d5266f) and its README poster. The poster is a frame from 12.4 seconds, scaled to 1280 × 720. The video is a stylized demonstration of the unreleased extension candidate, with fictional note text and filenames.
+These credits accompany the [35-second Media Gallery promo](https://github.com/user-attachments/assets/231fe2f3-0dd3-490e-82d4-39cbf358c68d) and its README poster. The poster is the opening title frame, scaled to 1280 × 720. The video is a stylized demonstration of the unreleased extension candidate, with fictional note text and filenames.
 
 The photographs are **not all public domain**. The dog, cat, and car require attribution under the licences below; only the sunflower is CC0.
 
@@ -22,8 +22,8 @@ The dog photograph is © Jakub Hałun, licensed CC BY-SA 4.0. As scaled and crop
 
 ## Version and provenance
 
-- Video: `media-gallery-launch-silent-v7.mp4`, 1920 × 1080, 30 frames per second, 35 seconds, no audio.
-- Video SHA-256: `caa95650a32a32e1b1e454e3315e4de43d941867ba2ab98a1263ebf6efd44e91`.
+- Video: `media-gallery-launch-v8-share.mp4`, 1920 × 1080, 30 frames per second, 35 seconds, with the RoamJS Query Builder launch instrumental.
+- Video SHA-256: `b36e82b35078610d7fc7103786852150ba82cb1ffeffb87f74b5e65a30f9d5d1`.
 - Demonstrated extension source: `ad433a5ce3b03cfcb4c26c4f9fc2730eb6326b73` (unreleased candidate).
 - Photo selections recorded November 4, 2026. The video includes a short on-screen credit; this page retains the full links and change notices.
 - The “red car” similarity scores come from a direct local MobileCLIP probe on these four files using the candidate's model configuration. They are not an authenticated Roam screen capture or match probabilities.
