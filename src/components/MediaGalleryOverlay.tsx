@@ -43,8 +43,7 @@ import {
   openMediaItemReferences,
   openMediaItemSource,
   queryAllMediaItems,
-  uploadFileAndCreateReference,
-  PendingUploadReference,
+  uploadDestinationLabel,
   withFileMetadata,
   withImageDimensions,
 } from "~/utils/media/roam";
@@ -172,7 +171,20 @@ const MediaGalleryOverlay = ({
     Record<string, boolean>
   >({});
   const [indexStale, setIndexStale] = useState(false);
-  const uploadBusyRef = useRef(false);
+  const batch = recoveryQueue.batch;
+  const [, updateBatch] = useState(0);
+  const [destination, setDestination] = useState(
+    uploadParentUid ? "selected location" : "Media Gallery Uploads",
+  );
+  React.useEffect(() => {
+    let current = true;
+    void uploadDestinationLabel(uploadParentUid).then((label) => {
+      if (current) setDestination(label);
+    });
+    return () => {
+      current = false;
+    };
+  }, [uploadParentUid]);
   const semanticSummaryGenerationRef = useRef(0);
   const semanticSavingRef = useRef(false);
   const semanticBusyRef = useRef<boolean>(false);
@@ -184,7 +196,7 @@ const MediaGalleryOverlay = ({
   const [filters, setFilters] = useState<MediaFilters>(DEFAULT_FILTERS);
   const [mode, setMode] = useState<MediaGalleryMode>(initialMode);
   const [loading, setLoading] = useState<boolean>(true);
-  const [uploading, setUploading] = useState<boolean>(false);
+  const uploading = batch.busy;
   const [error, setError] = useState<string>("");
   const [dragging, setDragging] = useState<boolean>(false);
   const [showFilters, setShowFilters] = useState<boolean>(false);
@@ -302,7 +314,7 @@ const MediaGalleryOverlay = ({
       })
       .catch((measurementError: unknown) => {
         if (!isAbortError(measurementError))
-          setError("Could not check image dimensions. Refresh to retry.");
+          setDimensionFailures((value) => value + 1);
       })
       .finally(() => {
         if (!controller.signal.aborted) setDimensionProgress(null);
@@ -586,59 +598,31 @@ const MediaGalleryOverlay = ({
     [],
   );
 
+  React.useEffect(() => {
+    const changed = (): void => updateBatch((n) => n + 1);
+    const saved = (event: Event): void => {
+      setIndexStale(true);
+      void refreshItems({
+        expectedUrls: (event as CustomEvent<string[]>).detail,
+      });
+    };
+    batch.addEventListener("change", changed);
+    batch.addEventListener("saved", saved);
+    changed();
+    return () => {
+      batch.removeEventListener("change", changed);
+      batch.removeEventListener("saved", saved);
+    };
+  }, [batch, refreshItems]);
   const applyUploadedFiles = useCallback(
     async (uploads: PendingUpload[]): Promise<void> => {
-      if (!uploads.length || uploadBusyRef.current || semanticBusyRef.current)
-        return;
-      uploadBusyRef.current = true;
-      setUploading(true);
-      const uploadedUrls: string[] = [];
-      try {
-        for (const { file, fileName } of uploads) {
-          try {
-            uploadedUrls.push(
-              await uploadFileAndCreateReference({
-                file,
-                fileName,
-                parentUid: uploadParentUid,
-              }),
-            );
-          } catch (error) {
-            if (!(error instanceof PendingUploadReference)) throw error;
-            recoveryQueue.add(error);
-            if (!mountedRef.current)
-              renderToast({
-                id: "media-gallery-pending-upload",
-                content:
-                  "File uploaded. Open Media Gallery to retry its reference.",
-                intent: "warning",
-              });
-          }
-        }
-        if (uploadedUrls.length)
-          renderToast({
-            id: "media-gallery-upload-success",
-            content: `Added ${uploadedUrls.length} file reference(s).`,
-            intent: "success",
-          });
-      } catch (e) {
-        const message = e instanceof Error ? e.message : "Upload failed.";
-        renderToast({
-          id: "media-gallery-upload-error",
-          content: message,
-          intent: "danger",
-        });
-      } finally {
-        if (uploadedUrls.length) {
-          setIndexStale(true);
-          await refreshItems({ expectedUrls: uploadedUrls });
-        }
-        uploadBusyRef.current = false;
-        setUploading(false);
-        setDragging(false);
-      }
+      if (semanticBusyRef.current) return;
+      await batch.run(
+        uploads.map((upload) => ({ ...upload, parentUid: uploadParentUid })),
+        (item) => recoveryQueue.add(item),
+      );
     },
-    [refreshItems, uploadParentUid, recoveryQueue],
+    [batch, recoveryQueue, uploadParentUid],
   );
 
   const onFileInputChange = useCallback(
@@ -652,8 +636,8 @@ const MediaGalleryOverlay = ({
             (index === 0 ? fallbackFileName : "Uploaded media"),
         }),
       );
-      await applyUploadedFiles(uploads);
       event.target.value = "";
+      await applyUploadedFiles(uploads);
     },
     [applyUploadedFiles],
   );
@@ -872,17 +856,26 @@ const MediaGalleryOverlay = ({
     [],
   );
 
-  const activeFilterCount = (
-    [
-      "author",
-      "mediaType",
-      "orientation",
-      "createdFrom",
-      "createdTo",
-      "updatedFrom",
-      "updatedTo",
-    ] as const
-  ).filter((key) => filters[key] !== DEFAULT_FILTERS[key]).length;
+  const filterLabels = {
+    author: "Block author",
+    mediaType: "Media type",
+    orientation: "Orientation",
+    createdFrom: "Created from",
+    createdTo: "Created to",
+    updatedFrom: "Updated from",
+    updatedTo: "Updated to",
+  } as const;
+  const activeKeys = (
+    Object.keys(filterLabels) as (keyof typeof filterLabels)[]
+  ).filter((key) => filters[key] !== DEFAULT_FILTERS[key]);
+  const activeFilterCount = activeKeys.length;
+  const clearFilters = (): void =>
+    setFilters((current) => ({
+      ...DEFAULT_FILTERS,
+      query: current.query,
+      sortBy: current.sortBy,
+      sortDirection: current.sortDirection,
+    }));
   const activePreviewItem = previewItem
     ? items.find((item) => item.id === previewItem.id) || previewItem
     : null;
@@ -1001,6 +994,12 @@ const MediaGalleryOverlay = ({
               disabled={Boolean(semanticOperation)}
               onClick={() => inputRef.current?.click()}
             />
+            <span
+              className="roamjs-media-gallery-hint gallery-destination"
+              title={destination}
+            >
+              Add to {destination}
+            </span>
             <Button
               minimal
               text="Refresh"
@@ -1019,20 +1018,7 @@ const MediaGalleryOverlay = ({
                 aria-controls="media-gallery-filters"
                 onClick={() => setShowFilters((current) => !current)}
               />
-              {activeFilterCount ||
-              filters.query ||
-              filters.sortBy !== DEFAULT_FILTERS.sortBy ||
-              filters.sortDirection !== DEFAULT_FILTERS.sortDirection ? (
-                <Button
-                  minimal
-                  text="Reset"
-                  onClick={() => setFilters(DEFAULT_FILTERS)}
-                />
-              ) : null}
             </>
-            <span className="roamjs-media-gallery-hint">
-              Drop files here to upload
-            </span>
             <input
               ref={inputRef}
               type="file"
@@ -1042,8 +1028,68 @@ const MediaGalleryOverlay = ({
               onChange={(event) => void onFileInputChange(event)}
             />
           </div>
+          {activeKeys.length > 0 && !showFilters && (
+            <div
+              className="roamjs-media-gallery-active-filters"
+              aria-label="Active filters"
+            >
+              {activeKeys.map((key) => {
+                const label =
+                  filterLabels[key] +
+                  ": " +
+                  (key === "author" && /^[a-z0-9_-]{20,}$/i.test(filters[key])
+                    ? "Unknown block author " +
+                      (authors.indexOf(filters[key]) + 1)
+                    : filters[key]);
+                return (
+                  <Button
+                    key={key}
+                    small
+                    outlined
+                    rightIcon="cross"
+                    text={label}
+                    aria-label={"Remove " + label}
+                    onClick={() => updateFilter(key, DEFAULT_FILTERS[key])}
+                  />
+                );
+              })}
+            </div>
+          )}
+          {batch.outcomes.length > 0 && (
+            <div
+              className="gallery-upload-outcomes"
+              aria-label="Upload outcomes"
+            >
+              {batch.outcomes.map((row) => (
+                <div key={row.id}>
+                  <span>{row.fileName}</span> ·{" "}
+                  <span role="status">{row.status}</span>{" "}
+                  {row.retry && (
+                    <Button
+                      small
+                      text="Retry upload"
+                      title={row.message}
+                      disabled={uploading || Boolean(semanticOperation)}
+                      onClick={() => {
+                        if (row.retry)
+                          void batch.run(
+                            [row.retry],
+                            (item) => recoveryQueue.add(item),
+                            row,
+                          );
+                      }}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
           <UploadRecovery
             queue={recoveryQueue}
+            onOpen={() => {
+              navigatingRef.current = true;
+              onClose();
+            }}
             onRecovered={(url) => {
               setIndexStale(true);
               void refreshItems({ expectedUrls: [url] });
@@ -1196,7 +1242,14 @@ const MediaGalleryOverlay = ({
             </div>
           ) : null}
           {error ? (
-            <Callout intent="danger" title="Could not load media">
+            <Callout
+              intent="danger"
+              title={
+                queryRevision
+                  ? "Couldn’t refresh. Showing previous results."
+                  : "Could not load media"
+              }
+            >
               {error}
               <Button
                 minimal
@@ -1211,13 +1264,17 @@ const MediaGalleryOverlay = ({
             role="status"
           >
             <span className="roamjs-media-gallery-count">
-              {mode === "keyword"
-                ? `${galleryResults.length} of ${items.length} files`
-                : semanticSearchedQuery
-                  ? semanticLimitReached
-                    ? `Top ${SEMANTIC_SEARCH_LIMIT} of ${filteredSemanticResults.length} indexed images for “${semanticSearchedQuery}”`
-                    : `${galleryResults.length} ranked image${galleryResults.length === 1 ? "" : "s"} for “${semanticSearchedQuery}”`
-                  : "Search images by description"}
+              {!queryRevision
+                ? ""
+                : loading
+                  ? "Refreshing media…"
+                  : mode === "keyword"
+                    ? `${galleryResults.length} of ${items.length} files`
+                    : semanticSearchedQuery
+                      ? semanticLimitReached
+                        ? `Top ${SEMANTIC_SEARCH_LIMIT} of ${filteredSemanticResults.length} indexed images for “${semanticSearchedQuery}”`
+                        : `${galleryResults.length} ranked image${galleryResults.length === 1 ? "" : "s"} for “${semanticSearchedQuery}”`
+                      : "Search images by description"}
             </span>
             {mode === "semantic" && semanticSearchedQuery ? (
               <span className="roamjs-media-gallery-hint">
@@ -1242,12 +1299,12 @@ const MediaGalleryOverlay = ({
             className="roamjs-media-gallery-results"
             aria-busy={loading || Boolean(dimensionProgress)}
           >
-            {loading ? (
+            {loading && !queryRevision ? (
               <div className="roamjs-media-gallery-loading" role="status">
                 <Spinner size={24} />
                 <span>Loading media…</span>
               </div>
-            ) : galleryResults.length ? (
+            ) : !queryRevision ? null : galleryResults.length ? (
               <ul
                 className="roamjs-media-gallery-grid"
                 aria-label="Media results"
@@ -1301,17 +1358,23 @@ const MediaGalleryOverlay = ({
                             ? "Describe an image above to search this graph's index."
                             : "Build an image index to get started."
                         : items.length
-                          ? "Try a different search or reset your filters."
+                          ? "Try another search or remove an active filter."
                           : "Upload a file or add a media link to a block in this graph."}
                     </p>
-                    {items.length &&
-                    (mode === "keyword" || activeFilterCount) ? (
+                    {mode === "keyword" && filters.query && (
                       <Button
                         minimal
-                        text="Reset filters"
-                        onClick={() => setFilters(DEFAULT_FILTERS)}
+                        text="Clear search"
+                        onClick={() => updateFilter("query", "")}
                       />
-                    ) : null}
+                    )}
+                    {activeFilterCount > 0 && (
+                      <Button
+                        minimal
+                        text="Clear filters"
+                        onClick={clearFilters}
+                      />
+                    )}
                   </>
                 )}
               </div>
@@ -1352,7 +1415,7 @@ const MediaGalleryOverlay = ({
               className="roamjs-media-gallery-drop-target"
               aria-hidden="true"
             >
-              Drop files to upload
+              Drop files to add to {destination}
             </div>
           ) : null}
         </div>

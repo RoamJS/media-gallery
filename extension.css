@@ -253,6 +253,7 @@ body
 }
 .roamjs-media-gallery-toolbar,
 .roamjs-media-gallery-tools,
+.roamjs-media-gallery-active-filters,
 .roamjs-media-gallery-modes {
   display: flex;
   flex: 0 0 auto;
@@ -953,4 +954,17 @@ body
 .roamjs-media-gallery-reference-link:focus-visible {
   outline: 2px solid #137cbd;
   outline-offset: 2px;
+}
+
+.roamjs-media-gallery-tools > .gallery-destination {
+  margin-left: 0;
+  margin-right: auto;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.roamjs-media-gallery-dialog .gallery-upload-outcomes {
+  max-height: 7rem;
+  overflow-y: auto;
 }

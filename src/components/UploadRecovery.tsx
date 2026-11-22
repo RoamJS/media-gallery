@@ -1,12 +1,15 @@
+import { UploadBatch } from "~/utils/media/uploadBatch";
 import React, { useEffect, useState } from "react";
 import { Button, Callout } from "@blueprintjs/core";
 import {
   copyTextToClipboard,
+  uploadDestinationLabel,
   type PendingUploadReference,
 } from "~/utils/media/roam";
 
 // Owned by the extension so closing the gallery while a write is pending keeps its recovery actions.
 export class UploadRecoveryQueue extends EventTarget {
+  readonly batch = new UploadBatch();
   readonly pending = new Set<PendingUploadReference>();
   readonly retrying = new Set<PendingUploadReference>();
   add(item: PendingUploadReference): void {
@@ -31,8 +34,10 @@ export class UploadRecoveryQueue extends EventTarget {
 export const UploadRecovery = ({
   queue,
   onRecovered,
+  onOpen,
 }: {
   queue: UploadRecoveryQueue;
+  onOpen: () => void;
   onRecovered: (url: string) => void;
 }): React.ReactElement | null => {
   const [, redraw] = useState(0);
@@ -43,56 +48,90 @@ export const UploadRecovery = ({
     update();
     return () => queue.removeEventListener("change", update);
   }, [queue]);
-  if (!queue.pending.size) return null;
+  const [saved, setSaved] = useState<{ label: string; uid: string }[]>([]);
+  if (!queue.pending.size && !saved.length) return null;
   return (
-    <Callout title="Uploaded files awaiting a reference" intent="warning">
-      <p>
-        Retry adds the link at the original destination, or on Media Gallery
-        Uploads if that destination was deleted.
-      </p>
-      {Array.from(queue.pending, (item) => (
-        <div key={item.reference.blockUid}>
-          <strong>{item.reference.fileName}</strong>{" "}
+    <>
+      {" "}
+      {saved.map((item) => (
+        <div key={item.uid} role="status">
+          Saved to {item.label}{" "}
           <Button
             small
-            text="Retry reference"
-            disabled={queue.retrying.has(item)}
+            text="Open block"
             onClick={async () => {
               try {
-                if (await queue.retry(item)) onRecovered(item.reference.url);
-              } catch (error) {
-                setFeedback(
-                  error instanceof Error
-                    ? error.message
-                    : "Could not save the reference.",
-                );
-              }
-            }}
-          />
-          <Button
-            small
-            minimal
-            text="Copy file URL"
-            onClick={async () => {
-              try {
-                await copyTextToClipboard({ text: item.reference.url });
-                setFeedback("File URL copied.");
+                await window.roamAlphaAPI.ui.mainWindow.openBlock({
+                  block: { uid: item.uid },
+                });
+                onOpen();
               } catch {
-                setFeedback(
-                  "Copy failed. Select the file URL to copy it manually.",
-                );
+                setFeedback("Could not open the saved block.");
               }
             }}
-          />
-          <input
-            readOnly
-            aria-label={`Uploaded file URL for ${item.reference.fileName}`}
-            value={item.reference.url}
-            onFocus={(event) => event.currentTarget.select()}
           />
         </div>
-      ))}
-      <span role="status">{feedback}</span>
-    </Callout>
+      ))}{" "}
+      {queue.pending.size > 0 && (
+        <Callout title="Uploaded files awaiting a reference" intent="warning">
+          <p>
+            Retry adds the link at the original destination, or on Media Gallery
+            Uploads if that destination was deleted.
+          </p>
+          {Array.from(queue.pending, (item) => (
+            <div key={item.reference.blockUid}>
+              <strong>{item.reference.fileName}</strong>{" "}
+              <Button
+                small
+                text="Retry reference"
+                disabled={queue.retrying.has(item)}
+                onClick={async () => {
+                  try {
+                    if (await queue.retry(item)) {
+                      onRecovered(item.reference.url);
+                      const label = item.destinationUid
+                        ? await uploadDestinationLabel(item.destinationUid)
+                        : "the graph";
+                      setSaved((rows) => [
+                        ...rows,
+                        { label, uid: item.reference.blockUid },
+                      ]);
+                    }
+                  } catch (error) {
+                    setFeedback(
+                      error instanceof Error
+                        ? error.message
+                        : "Could not save the reference.",
+                    );
+                  }
+                }}
+              />
+              <Button
+                small
+                minimal
+                text="Copy file URL"
+                onClick={async () => {
+                  try {
+                    await copyTextToClipboard({ text: item.reference.url });
+                    setFeedback("File URL copied.");
+                  } catch {
+                    setFeedback(
+                      "Copy failed. Select the file URL to copy it manually.",
+                    );
+                  }
+                }}
+              />
+              <input
+                readOnly
+                aria-label={`Uploaded file URL for ${item.reference.fileName}`}
+                value={item.reference.url}
+                onFocus={(event) => event.currentTarget.select()}
+              />
+            </div>
+          ))}
+        </Callout>
+      )}{" "}
+      {feedback && <span role="status">{feedback}</span>}
+    </>
   );
 };

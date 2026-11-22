@@ -457,6 +457,22 @@ export const captureUploadParentUid = (): string | null => {
   return getCurrentPageUid() || null;
 };
 
+export const uploadDestinationLabel = async (
+  uid?: string | null,
+): Promise<string> => {
+  if (!uid) return MEDIA_UPLOADS_PAGE;
+  try {
+    const label: unknown = await window.roamAlphaAPI.data.async.q(
+      "[:find ?label . :in $ ?uid :where [?p :block/uid ?uid] (or [?p :node/title ?label] [?p :block/string ?label])]",
+      uid,
+    );
+    if (typeof label === "string") return label.trim() || "untitled block";
+  } catch {
+    /* A label lookup must not prevent uploads. */
+  }
+  return "selected location";
+};
+
 const getPageUidByTitle = async ({
   title,
 }: {
@@ -566,7 +582,7 @@ type UploadedReference = {
 const writeUploadedReference = async (
   reference: UploadedReference,
   parentUid: string | null,
-): Promise<void> => {
+): Promise<string> => {
   const destination = await getOrCreateUploadsParentUid({ parentUid });
   await createBlock({
     parentUid: destination,
@@ -574,9 +590,11 @@ const writeUploadedReference = async (
     node: { uid: reference.blockUid, text: reference.text },
   });
   await waitForBlockToBeQueryable({ blockUid: reference.blockUid });
+  return destination;
 };
 
 export class PendingUploadReference extends Error {
+  destinationUid: string | null = null;
   constructor(readonly reference: UploadedReference) {
     super("File uploaded, but its reference could not be confirmed.");
   }
@@ -587,7 +605,13 @@ export class PendingUploadReference extends Error {
       "[:find ?s . :in $ ?uid :where [?b :block/uid ?uid] [?b :block/string ?s]]",
       blockUid,
     );
-    if (existing === text) return;
+    if (existing === text) {
+      this.destinationUid = (await window.roamAlphaAPI.data.async.q(
+        "[:find ?uid . :in $ ?child :where [?b :block/uid ?child] [?p :block/children ?b] [?p :block/uid ?uid]]",
+        blockUid,
+      )) as unknown as string | null;
+      return;
+    }
     if (typeof existing === "string")
       throw new Error(
         "This reference was edited. Copy the file URL to keep that edit.",
@@ -598,7 +622,7 @@ export class PendingUploadReference extends Error {
         "[:find ?e . :in $ ?uid :where [?e :block/uid ?uid]]",
         parentUid,
       ));
-    await writeUploadedReference(
+    this.destinationUid = await writeUploadedReference(
       this.reference,
       parentExists ? parentUid : null,
     );
