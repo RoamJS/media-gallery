@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import {
+  PendingUploadReference,
   captureUploadParentUid,
   formatUploadedMediaReference,
   getFileByUrl,
@@ -295,10 +296,9 @@ test("creates the uploads page when the captured destination and fallback page a
   });
 
   expect(parentUid).toBeNull();
-  expect(context.createdPages).toEqual([
-    { title: "Media Gallery Uploads", uid: "created-1" },
-  ]);
-  expect(context.createdBlocks[0].parentUid).toBe("created-1");
+  expect(context.createdPages).toHaveLength(1);
+  expect(context.createdPages[0].title).toBe("Media Gallery Uploads");
+  expect(context.createdBlocks[0].parentUid).toBe(context.createdPages[0].uid);
   expect(context.focusReads).toBe(1);
 });
 
@@ -401,7 +401,40 @@ for (const { name, mime, mediaType } of [
     expect(extractMediaReferences(text)[0]).toMatchObject({
       url,
       displayName: name,
-      mediaType,
+      mediaType: mime === "image/gif" ? "gif" : mediaType,
     });
   });
 }
+
+test("retries only the reference when an upload succeeds and its destination disappears", async () => {
+  let uploads = 0;
+  const ctx = setRoamUploadContext({
+    upload: async () => {
+      uploads++;
+      return HOSTED_URL;
+    },
+  });
+  const api = window.roamAlphaAPI;
+  const create = api.createBlock;
+  let writes = 0;
+  api.createBlock = async (args) => {
+    writes++;
+    if (writes === 1) throw new Error("Destination removed");
+    return create(args);
+  };
+  const failure = await uploadFileAndCreateReference({
+    file: new File(["x"], "Photo.png", { type: "image/png" }),
+  }).catch((e) => e);
+  expect(failure).toBeInstanceOf(PendingUploadReference);
+  expect(failure.reference.url).toBe(HOSTED_URL);
+  const query = api.data.async.q;
+  api.data.async.q = (q, ...args) =>
+    q.includes(":find ?s .") || q.includes(":find ?e .")
+      ? (Promise.resolve(null) as unknown as ReturnType<typeof query>)
+      : query(q, ...args);
+  await failure.retry();
+  expect([uploads, writes]).toEqual([1, 2]);
+  expect(ctx.createdBlocks).toEqual([
+    { parentUid: "uploads-page", text: `![Photo.png](${HOSTED_URL})` },
+  ]);
+});

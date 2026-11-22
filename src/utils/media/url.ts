@@ -61,7 +61,7 @@ const MARKDOWN_MEDIA_START_REGEX = /(!?)\[([^\[\]]*)\]\((https?:\/\/)/gi;
 const MARKDOWN_TITLE_END_REGEX =
   /^\s+(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\((?:\\.|[^)\\])*\))?\s*\)/;
 const ROAM_MEDIA_MACRO_REGEX =
-  /\{\{\s*(?:\[\[)?(video|audio)(?:\]\])?\s*:\s*(https?:\/\/[^}\s]+)\s*\}\}/gi;
+  /\{\{\s*(?:\[\[)?(video|audio|pdf)(?:\]\])?\s*:\s*(https?:\/\/[^}\s]+)\s*\}\}/gi;
 
 const TRAILING_CHARS = new Set([")", "]", "}", ">", ",", ".", ";", ":"]);
 
@@ -178,7 +178,7 @@ export const inferMimeType = ({
   return "application/octet-stream";
 };
 
-type MediaTypeHint = Extract<MediaType, "image" | "video" | "audio">;
+type MediaTypeHint = Extract<MediaType, "image" | "video" | "audio" | "pdf">;
 
 const shouldKeepUrl = ({
   url,
@@ -225,7 +225,7 @@ export const parseMediaUrl = (
   raw: string,
   mediaTypeHint?: MediaTypeHint,
 ): ParsedMediaUrl | null => {
-  const clean = stripTrailingChars(raw.trim());
+  const clean = raw.trim();
   const parsed = toUrlOrNull(clean);
   if (!parsed) {
     return null;
@@ -268,6 +268,7 @@ type MediaReferenceMetadata = {
   terms: string[];
   mediaTypeHint?: MediaTypeHint;
   displayName?: string;
+  imageFileName?: string;
 };
 
 const parseMarkdownTarget = ({
@@ -310,7 +311,7 @@ const getMediaReferenceData = (
   const plainText = blockString.split("");
   const byUrl = new Map<
     string,
-    { terms: Set<string>; mediaTypeHint?: MediaTypeHint; displayName?: string }
+    Omit<MediaReferenceMetadata, "terms"> & { terms: Set<string> }
   >();
   const add = ({
     url,
@@ -323,21 +324,25 @@ const getMediaReferenceData = (
     mediaTypeHint?: MediaTypeHint;
     displayName?: string;
   }): void => {
-    const key = stripTrailingChars(url.trim());
+    const key = url;
     if (!key) {
       return;
     }
     if (!byUrl.has(key)) {
       byUrl.set(key, { terms: new Set<string>(), mediaTypeHint, displayName });
     }
-    const metadata = byUrl.get(key) as {
-      terms: Set<string>;
-      mediaTypeHint?: MediaTypeHint;
-      displayName?: string;
-    };
+    const metadata = byUrl.get(key)!;
     addSearchTerm({ all: metadata.terms, term });
     metadata.mediaTypeHint ||= mediaTypeHint;
     metadata.displayName ||= displayName;
+    if (
+      mediaTypeHint === "image" &&
+      displayName &&
+      (IMAGE_EXTENSIONS.has(getExtension(displayName)) ||
+        GIF_EXTENSIONS.has(getExtension(displayName)))
+    ) {
+      metadata.imageFileName ||= displayName;
+    }
   };
 
   MARKDOWN_MEDIA_START_REGEX.lastIndex = 0;
@@ -385,6 +390,7 @@ const getMediaReferenceData = (
       Array.from(byUrl.entries()).map(([url, metadata]) => [
         url,
         {
+          imageFileName: metadata.imageFileName,
           terms: Array.from(metadata.terms),
           mediaTypeHint: metadata.mediaTypeHint,
           displayName: metadata.displayName,
@@ -408,7 +414,7 @@ export const extractMediaReferences = (
   const matches = [
     ...recognized,
     ...Array.from(plainText.matchAll(URL_REGEX), (match) => ({
-      url: match[0],
+      url: stripTrailingChars(match[0]),
       index: match.index ?? 0,
     })),
   ]
@@ -425,9 +431,27 @@ export const extractMediaReferences = (
     >
   >((all, raw) => {
     try {
-      const metadata = metadataByUrl.get(stripTrailingChars(raw.trim()));
+      const metadata = metadataByUrl.get(raw);
       const parsed = parseMediaUrl(raw, metadata?.mediaTypeHint);
       if (parsed) {
+        if (
+          !parsed.extension &&
+          parsed.mediaType === "image" &&
+          isRoamStorageUrl(raw)
+        ) {
+          const extension = getExtension(metadata?.imageFileName || "");
+          if (
+            IMAGE_EXTENSIONS.has(extension) ||
+            GIF_EXTENSIONS.has(extension)
+          ) {
+            parsed.extension = extension;
+            parsed.mediaType = classifyMediaType({ extension, mimeType: "" });
+            parsed.mimeType = inferMimeType({
+              mediaType: parsed.mediaType,
+              extension,
+            });
+          }
+        }
         if (!all.has(parsed.url)) {
           const terms = new Set<string>();
           addSearchTerm({ all: terms, term: parsed.fileName });

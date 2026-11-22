@@ -2,6 +2,7 @@ import runExtension from "roamjs-components/util/runExtension";
 import { render as renderToast } from "roamjs-components/components/Toast";
 import createOverlayRender from "roamjs-components/util/createOverlayRender";
 
+import { UploadRecoveryQueue } from "~/components/UploadRecovery";
 import MediaGalleryOverlay, {
   type MediaGalleryMode,
   type MediaGalleryOverlayRenderProps,
@@ -20,6 +21,7 @@ export default runExtension(async ({ extensionAPI }) => {
       "roamjs-media-gallery-overlay",
       MediaGalleryOverlay,
     );
+  const recoveryQueue = new UploadRecoveryQueue();
   const semanticClient = createSemanticWorkerClient();
   let closeOverlay: (() => void) | undefined;
 
@@ -33,6 +35,7 @@ export default runExtension(async ({ extensionAPI }) => {
     const uploadParentUid = captureUploadParentUid();
     closeOverlay?.();
     closeOverlay = renderMediaGallery({
+      recoveryQueue,
       semanticClient,
       initialMode,
       autoStartBuild,

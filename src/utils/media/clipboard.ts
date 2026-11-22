@@ -19,8 +19,10 @@ const CONVERTIBLE_IMAGE_TYPES = new Set([
 const normalizeMimeType = (mimeType: string): string =>
   mimeType.split(";")[0].trim().toLowerCase();
 
-const canCopyImage = (mimeType: string): boolean =>
-  mimeType === PNG_MIME_TYPE || CONVERTIBLE_IMAGE_TYPES.has(mimeType);
+export const canCopyImage = (mimeType: string): boolean => {
+  const type = normalizeMimeType(mimeType);
+  return type === PNG_MIME_TYPE || CONVERTIBLE_IMAGE_TYPES.has(type);
+};
 
 const convertImageToPng = async (file: File): Promise<Blob> => {
   const mimeType = normalizeMimeType(file.type);
