@@ -6,6 +6,7 @@
   "scripts": {
     "postinstall": "patch-package",
     "start": "samepage dev",
+    "prebuild:roam": "npm ci --no-audit --no-fund",
     "build:roam": "samepage build --dry",
     "test": "samepage test",
     "typecheck": "tsc --noEmit"
