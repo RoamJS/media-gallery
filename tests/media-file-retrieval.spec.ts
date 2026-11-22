@@ -7,6 +7,7 @@ import {
   getFileByUrl,
   uploadFileAndCreateReference,
 } from "~/utils/media/roam";
+import { UploadBatch } from "~/utils/media/uploadBatch";
 import { extractMediaReferences } from "~/utils/media/url";
 
 const HOSTED_URL =
@@ -436,5 +437,37 @@ test("retries only the reference when an upload succeeds and its destination dis
   expect([uploads, writes]).toEqual([1, 2]);
   expect(ctx.createdBlocks).toEqual([
     { parentUid: "uploads-page", text: `![Photo.png](${HOSTED_URL})` },
+  ]);
+});
+
+test("a failed file can retry at its original destination after the rest of the batch succeeds", async () => {
+  let attempts = 0;
+  const ctx = setRoamUploadContext({
+    upload: async () => {
+      if (++attempts === 1) throw Error("Storage unavailable");
+      return HOSTED_URL;
+    },
+  });
+  const batch = new UploadBatch();
+  const files = ["first.png", "next.png"].map((fileName) => ({
+    file: new File(["fixture"], fileName),
+    fileName,
+    parentUid: "original-block",
+  }));
+  const pending = (): never => {
+    throw Error("Unexpected reference failure");
+  };
+  await batch.run(files, pending);
+  expect(batch.outcomes.map((row) => row.status)).toEqual([
+    "Upload failed",
+    "Saved",
+  ]);
+  const failed = batch.outcomes[0];
+  await batch.run([failed.retry!], pending, failed);
+  expect(batch.outcomes.map((row) => row.status)).toEqual(["Saved", "Saved"]);
+  expect(attempts).toBe(3);
+  expect(ctx.createdBlocks.map((block) => block.parentUid)).toEqual([
+    "original-block",
+    "original-block",
   ]);
 });

@@ -19,6 +19,10 @@
 
 ### Changed
 
+- Keep previous results visible during refresh and distinguish read failures from an empty gallery.
+- Show upload destinations, per-file progress and retries, and a direct link to recovered blocks.
+- Show removable active filters and preserve sort when clearing search or filters.
+
 - Refresh the gallery with a white dialog and compact Blueprint 3 controls inspired by Roam's advanced search.
 - Label the filter control **Filters**, show its active count, and provide reset controls.
 - Share author, media-type, orientation, and reference-block date filters between keyword and semantic search, applying them before the semantic result limit.
