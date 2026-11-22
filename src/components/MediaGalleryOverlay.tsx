@@ -1029,7 +1029,10 @@ const MediaGalleryOverlay = ({
             />
           </div>
           {activeKeys.length > 0 && !showFilters && (
-            <div className="flex flex-wrap gap-2" aria-label="Active filters">
+            <div
+              className="roamjs-media-gallery-active-filters"
+              aria-label="Active filters"
+            >
               {activeKeys.map((key) => {
                 const label =
                   filterLabels[key] +
@@ -1355,7 +1358,7 @@ const MediaGalleryOverlay = ({
                             ? "Describe an image above to search this graph's index."
                             : "Build an image index to get started."
                         : items.length
-                          ? "Try a different search or reset your filters."
+                          ? "Try another search or remove an active filter."
                           : "Upload a file or add a media link to a block in this graph."}
                     </p>
                     {mode === "keyword" && filters.query && (

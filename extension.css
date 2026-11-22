@@ -253,6 +253,7 @@ body
 }
 .roamjs-media-gallery-toolbar,
 .roamjs-media-gallery-tools,
+.roamjs-media-gallery-active-filters,
 .roamjs-media-gallery-modes {
   display: flex;
   flex: 0 0 auto;
