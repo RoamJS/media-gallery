@@ -6,7 +6,7 @@
 
 **Find media across your graph in one gallery. Search by name or visual meaning, preview files, and jump straight to their source blocks.**
 
-[![RoamJS](https://roamjs.com/badges/website.svg)](https://roamjs.com/) [![DeepWiki](https://roamjs.com/badges/deepwiki.svg)](https://deepwiki.com/RoamJS/media-gallery) [![Slack](https://roamjs.com/badges/slack.svg)](https://roamresearch.slack.com/archives/C016N2B66JU)
+[![RoamJS](https://roamjs.com/badges/website.svg)](https://roamjs.com/) [![DeepWiki](https://roamjs.com/badges/deepwiki.svg)](https://deepwiki.com/RoamJS/media-gallery) [![#roam-js on Slack](https://roamjs.com/badges/slack.svg)](https://roamresearch.slack.com/archives/C016N2B66JU)
 
 [![Watch the 35-second Media Gallery launch promo](https://raw.githubusercontent.com/RoamJS/media-gallery/main/docs/media/launch-promo-poster.jpg)](https://github.com/user-attachments/assets/231fe2f3-0dd3-490e-82d4-39cbf358c68d)
 
